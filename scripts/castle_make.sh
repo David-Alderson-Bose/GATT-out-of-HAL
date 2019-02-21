@@ -48,11 +48,16 @@ export CXX=${RIVIERA_TOOLCHAIN}/sdk/sysroots/`uname -m`-oesdk-linux/usr/bin/arm-
 export LD=${RIVIERA_TOOLCHAIN}/sdk/sysroots/`uname -m`-oesdk-linux/usr/bin/arm-oemllib32-linux/arm-oemllib32-linux-ld
 export AR=${RIVIERA_TOOLCHAIN}/sdk/sysroots/`uname -m`-oesdk-linux/usr/bin/arm-oemllib32-linux/arm-oemllib32-linux-ar
 export RANLIB=${RIVIERA_TOOLCHAIN}/sdk/sysroots/`uname -m`-oesdk-linux/usr/bin/arm-oemllib32-linux/arm-oemllib32-linux-ranlib
-export INCLUDE=${RIVIERA_TOOLCHAIN}/sdk/sysroots/aarch64-oe-linux/usr/include
-export LIB=${RIVIERA_TOOLCHAIN}/sdk/sysroots`uname -m`-oesdk-linux/usr/lib
-export COMMON_FLAGS="--sysroot=${SYSROOT} -mtune=cortex-a53 -ftree-vectorize  -I${INCLUDE}"
+export CASTLE_INCLUDE=${RIVIERA_TOOLCHAIN}/sdk/sysroots/aarch64-oe-linux/usr/include
+#export CASTLE_LIB=${RIVIERA_TOOLCHAIN}/sdk/sysroots`uname -m`-oesdk-linux/usr/lib
+export CASTLE_LIB=${RIVIERA_TOOLCHAIN}/sdk/sysroots/aarch64-oe-linux/usr/lib
+export COMMON_FLAGS="--sysroot=${SYSROOT} -mtune=cortex-a53 -ftree-vectorize  -L${CASTLE_LIB} -I${CASTLE_INCLUDE}"
 export CFLAGS="-std=c99"
 export CXX_FLAGS="-std=c++11"
+
+#echo castle lib: $CASTLE_LIB
+#ls $CASTLE_LIB
+
 
 # DO IT
 make
