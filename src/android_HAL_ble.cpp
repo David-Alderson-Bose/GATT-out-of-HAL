@@ -9,6 +9,7 @@ extern "C"
 #include "bt_gatt.h"
 #include "bt_gatt_server.h"
 #include "bt_gatt_client.h"
+#include "hardware/vendor.h"
 }
 
 #include <memory> // in case I want to use shared_ptr
@@ -19,17 +20,18 @@ static bt_uuid_t s_client_uuid;
 static int s_client_if( -1 );
 
 // ANdroind hal hardware structs
-struct hw_device_t *pHWDevice;
-hw_module_t *pHwModule;
-bluetooth_device_t *pBTDevice;
-std::shared_ptr<bt_interface_t> pBluetoothStack;
+namespace { // anonymous namespace to prevent pollution
+    struct hw_device_t *pHWDevice;
+    hw_module_t *pHwModule;
+    bluetooth_device_t *pBTDevice;
+    std::shared_ptr<bt_interface_t> pBluetoothStack;
+    std::shared_ptr<btvendor_interface_t> btVendorInterface;
 
 
-
-std::shared_ptr<btgatt_interface_t> m_pGATTInterface;
-std::shared_ptr<const btgatt_server_interface_t> m_pGATTServerInterface;
-std::shared_ptr<const btgatt_client_interface_t> m_pGATTClientInterface;
-
+    std::shared_ptr<btgatt_interface_t> m_pGATTInterface;
+    std::shared_ptr<const btgatt_server_interface_t> m_pGATTServerInterface;
+    std::shared_ptr<const btgatt_client_interface_t> m_pGATTClientInterface;
+}
 
 
 
@@ -58,6 +60,30 @@ int BTSetup()
     std::cout << "BT has been set UP." << std::endl;
     return 0;
 }
+
+
+void CreateAdaptors()
+{
+
+    // Do I need to reimplement this? or can I leave it?
+    // FluorideBluetoothDEVMAdapter::StackInitialize( m_pBluetoothStack );
+
+    auto ptr = pBluetoothStack->get_profile_interface( BT_PROFILE_VENDOR_ID );
+    btVendorInterface.reset( ( btvendor_interface_t* )ptr );
+
+    //m_logger.LogInfo( "Vendor interface: %p", ptr );
+    //m_pDEVM_Adapter = std::make_shared<FluorideBluetoothDEVMAdapter>( m_pBluetoothStack, m_btVendorInterface, m_frontdoor, m_task );
+    //m_ProfileAdapterList.push_back( m_pDEVM_Adapter );
+
+    //m_pA2DP_Adapter = std::make_shared<FluorideBluetoothA2DPAdapter>( m_pBluetoothStack, m_pAudioServer );
+    //m_ProfileAdapterList.push_back( m_pA2DP_Adapter );
+
+
+    // THIS IS WHERE WE DIP INTO GATTLAND
+    //m_pGATT_Adapter = std::make_shared<FluorideBluetoothGATTAdapter>( m_pBluetoothStack, m_btVendorInterface );
+}
+
+
 
 
 /*
