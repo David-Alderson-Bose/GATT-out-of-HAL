@@ -3,10 +3,32 @@
 # Print help
 usage() { 
 cat <<EOF
-Usage $0 [-r <Riviera Version>] [-v]
--d <install_dir>    Optional. Riviera Version (defaults to highest available).
+Use this to call makefiles for a caslte target without having to 
+go through components. 
+
+Exports the following to be available to gnu make:
+Gnu tools for castle: You know, CC, CXX, etc.
+CASTLE_INCLUDE: location for most header files
+CASTLE_LIB: location for most library files, both static and shared
+COMMON_FLAGS=: sysroot, -mtune=cortex-a53 -ftree-vectorize -L{CASTLE_LIB} -I{CASTLE_INCLUDE}"
+CFLAGS: -std=c99
+CXX_FLAGS: -std=c++11
+
+Usage:
+$0 [<rule>] [-r <Riviera Version>] 
+<rule>                  Optional. Target rule to pass into make.
+-r <Riviera Version>    Optional. Riviera Version (defaults to highest available).
+
 EOF
 }
+
+# Check for non-opt first arg, it'll be a make target rule
+if [ -z ${1+x} ]; then # check for no args
+    : # if there's no args, just pass
+elif [[ $1 != -* ]]; then 
+    RULE=$1
+    shift # bump arg positions for upcoming getopts
+fi
 
 # Parse args
 while getopts ":r:h" opt; do
@@ -24,13 +46,14 @@ while getopts ":r:h" opt; do
     esac
 done
 
+
 # Determine riviera version
 if [ -z ${VERSION+x} ]; then 
     # If no version provided, go find the highest one
     RIVIERA="/scratch/components-cache/Release/master/"
-    export RIVIERA_VERSION=`ls $RIVIERA | sort -d | tail -n1`
+    RIVIERA_VERSION=`ls $RIVIERA | sort -d | tail -n1`
 else 
-    export RIVIERA_VERSION=$VERSION
+    RIVIERA_VERSION=$VERSION
 fi
 
 # Source version-dependent variables and see if things worked
@@ -49,18 +72,13 @@ export LD=${RIVIERA_TOOLCHAIN}/sdk/sysroots/`uname -m`-oesdk-linux/usr/bin/arm-o
 export AR=${RIVIERA_TOOLCHAIN}/sdk/sysroots/`uname -m`-oesdk-linux/usr/bin/arm-oemllib32-linux/arm-oemllib32-linux-ar
 export RANLIB=${RIVIERA_TOOLCHAIN}/sdk/sysroots/`uname -m`-oesdk-linux/usr/bin/arm-oemllib32-linux/arm-oemllib32-linux-ranlib
 export CASTLE_INCLUDE=${RIVIERA_TOOLCHAIN}/sdk/sysroots/aarch64-oe-linux/usr/include
-#export CASTLE_LIB=${RIVIERA_TOOLCHAIN}/sdk/sysroots`uname -m`-oesdk-linux/usr/lib
 export CASTLE_LIB=${RIVIERA_TOOLCHAIN}/sdk/sysroots/aarch64-oe-linux/usr/lib
-export COMMON_FLAGS="--sysroot=${SYSROOT} -mtune=cortex-a53 -ftree-vectorize  -L${CASTLE_LIB} -I${CASTLE_INCLUDE}"
+export COMMON_FLAGS="--sysroot=${SYSROOT} -mtune=cortex-a53 -ftree-vectorize -L${CASTLE_LIB} -I${CASTLE_INCLUDE}"
 export CFLAGS="-std=c99"
 export CXX_FLAGS="-std=c++11"
 
-#echo castle lib: $CASTLE_LIB
-#ls $CASTLE_LIB
-
-
 # DO IT
-make
+make $RULE
 
 
 

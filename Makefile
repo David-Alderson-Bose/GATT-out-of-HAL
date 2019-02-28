@@ -1,6 +1,3 @@
-
-
-
 # Resulting executable
 EXE := build/gatt_outa_here
 
@@ -16,10 +13,8 @@ INCLUDE = -I./include \
 whole_archive = -Wl,--whole-archive,${CASTLE_LIB}/$(1),--no-whole-archive
 all_whole_archives = $(foreach lib,$(1),$(call whole_archive,$(lib)))
 
-
-
-# Libraries getting "whole archive"d
-HW_LIBS := \
+# Static libraries getting "whole archive"d
+HW_LIB_LIST := \
 	libbtcore.a \
 	libbt-hci.a \
 	libbtbta.a \
@@ -29,19 +24,19 @@ HW_LIBS := \
 	libbtosi.a \
 	libbtdevice.a \
 	libhardware.a
-HW_LIB_INVOKATION = $(call all_whole_archives,$(HW_LIBS))
+HW_LIBS = $(call all_whole_archives,$(HW_LIB_LIST))
 
-#SHARED_LIBS_FLAGS = \
-#	-lpthread \ 
-#	-lz \
-#	-ldl \
-#	-lrt \
-#	-lresolv \
-#	-lbluetoothdefault \
-#	-laudioutils \
-#	-llog
-SHARED_LIBS_FLAGS = -lpthread -lz -ldl -lrt -lresolv -lbluetoothdefault -laudioutils -llog -lcutils
-
+# Libraries to link against the normal way
+OTHER_LIBS := \
+	-lpthread \
+	-lz \
+	-ldl \
+	-lrt \
+	-lresolv \
+	-lbluetoothdefault \
+	-laudioutils \
+	-llog \
+	-lcutils
 
 .PHONY: all clean echo
 all: $(EXE)
@@ -49,7 +44,7 @@ all: $(EXE)
 # Link executable
 $(EXE): $(OBJS)
 	@echo 'Linking source file(s) $(OBJS) together into $@...'
-	@$(CXX) $(OBJS) $(COMMON_FLAGS) -rdynamic ${HW_LIB_INVOKATION} ${SHARED_LIBS_FLAGS} -o "$@" 
+	@$(CXX) $(OBJS) $(COMMON_FLAGS) -rdynamic ${HW_LIBS} ${OTHER_LIBS} -o "$@" 
 	@echo "Built $@"
 
 # Build cpp
