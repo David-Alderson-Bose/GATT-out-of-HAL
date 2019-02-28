@@ -34,7 +34,7 @@ std::shared_ptr<const btgatt_client_interface_t> m_pGATTClientInterface;
 
 
 extern   hw_module_t HAL_MODULE_INFO_SYM; // WWWWHYYYY ?????!
-void BTSetup() 
+int BTSetup() 
 {
     pHwModule = &HAL_MODULE_INFO_SYM;
 
@@ -53,8 +53,10 @@ void BTSetup()
         pBTDevice = NULL;
         //Shutdown();
         std::cout << "IT BLEW UPPPP" << std::endl;
-        return;
+        return 1;
     }
+    std::cout << "BT has been set UP." << std::endl;
+    return 0;
 }
 
 
@@ -157,7 +159,7 @@ void FluorideBluetoothAdapter::Shutdown()
 
 
 
-/*
+
 static btgatt_server_callbacks_t sBTGATTServerCallbacks =
 {
     RegisterServerCallback,
@@ -179,14 +181,13 @@ static btgatt_server_callbacks_t sBTGATTServerCallbacks =
 };
 */
 
-/*
+
 static btgatt_client_callbacks_t sBTGATTClientCallbacks =
 {
-    RegisterClientCallback,
-    //NULL, // scan_result_callback
-    ScanResultCallback,
-    ConnectClientCallback, // connect_callback
-    DisconnectClientCallback, // disconnect_callback
+    NULL, //RegisterClientCallback,
+    NULL, //ScanResultCallback,
+    NULL, //ConnectClientCallback, // connect_callback
+    NULL, //DisconnectClientCallback, // disconnect_callback
     NULL, // search_complete_callback
     NULL, // register_for_notification_callback
     NULL, // notify_callback
@@ -196,8 +197,8 @@ static btgatt_client_callbacks_t sBTGATTClientCallbacks =
     NULL, // write_descriptor_callback
     NULL, // execute_write_callback
     NULL, // read_remote_rssi_callback
-    ListenCallback,
-    ConfigureMtuCallback, // configure_mtu_callback
+    NULL, //ListenCallback,
+    NULL, //ConfigureMtuCallback, // configure_mtu_callback
     NULL, // scan_filter_cfg_callback
     NULL, // scan_filter_param_callback
     NULL, // scan_filter_status_callback
@@ -224,4 +225,4 @@ static btgatt_callbacks_t sBTGATTCallbacks = {
     NULL
 };
 
-*/
+

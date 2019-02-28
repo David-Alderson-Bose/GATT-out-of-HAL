@@ -65,5 +65,3 @@ clean:
 	@rm -rf build/*
 	@echo "Squeeky clean!"
 
-test:
-	@echo ${HW_LIB_INVOKATION}
