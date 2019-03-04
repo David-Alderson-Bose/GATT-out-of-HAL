@@ -105,7 +105,7 @@ namespace { // anonymous namespace to prevent pollution
         NULL
     };
     
-    
+    /*
     static bt_callbacks_t sBluetoothCallbacks = {
         sizeof( sBluetoothCallbacks ),
         NULL, //AdapterStateChangeCb,
@@ -123,13 +123,104 @@ namespace { // anonymous namespace to prevent pollution
         NULL, //EnergyInfoRecvCb,
         NULL, //HCIEventRecvCb,
     };
-
-    
-} // end anonymous namespace
+    */
 
 
 
-    // Callback that triggers once client is registered
+static void AdapterStateChangeCb( bt_state_t state )
+{
+    std::cout << __func__ << ":" << __LINE__ << std::endl;
+}
+
+static void AdapterPropertiesCb( bt_status_t status, int num_properties, bt_property_t *properties )
+{
+    std::cout << __func__ << ":" << __LINE__ << std::endl;
+}
+
+static void RemoteDevicePropertiesCb( bt_status_t status, bt_bdaddr_t *bd_addr, int num_properties, bt_property_t *properties )
+{
+    std::cout << __func__ << ":" << __LINE__ << std::endl;
+}
+
+static void DeviceFoundCb( int num_properties, bt_property_t *properties )
+{
+    std::cout << __func__ << ":" << __LINE__ << std::endl;
+}
+
+static void DiscoveryStateChangedCb( bt_discovery_state_t state )
+{
+    std::cout << __func__ << ":" << __LINE__ << std::endl;
+}
+
+static void PinRequestCb( bt_bdaddr_t *bd_addr, bt_bdname_t *bd_name, uint32_t cod, bool min_16_digit )
+{
+    std::cout << __func__ << ":" << __LINE__ << std::endl;
+}
+   
+static void SspRequestCb( bt_bdaddr_t *bd_addr, bt_bdname_t *bd_name, uint32_t cod, bt_ssp_variant_t pairing_variant, uint32_t pass_key )
+{
+    std::cout << __func__ << ":" << __LINE__ << std::endl;
+}
+
+static void BondStateChangedCb( bt_status_t status, bt_bdaddr_t *bd_addr, bt_bond_state_t state )
+{
+    std::cout << __func__ << ":" << __LINE__ << std::endl;
+}
+
+static void AclStateChangedCb( bt_status_t status, bt_bdaddr_t *bd_addr, bt_acl_state_t state )
+{
+    std::cout << __func__ << ":" << __LINE__ << std::endl;
+}
+
+static void CbThreadEvent( bt_cb_thread_evt event )
+{
+    std::cout << __func__ << ":" << __LINE__ << std::endl;
+}
+
+static void DutModeRecvCb( uint16_t opcode, uint8_t *buf, uint8_t len )
+{
+    std::cout << __func__ << ":" << __LINE__ << std::endl;
+}
+
+static void LeTestModeRecvCb( bt_status_t status, uint16_t packet_count )
+{
+    std::cout << __func__ << ":" << __LINE__ << std::endl;
+}
+
+static void EnergyInfoRecvCb( bt_activity_energy_info *p_energy_info, bt_uid_traffic_t *uid_data )
+{
+    std::cout << __func__ << ":" << __LINE__ << std::endl;
+}
+
+static void HCIEventRecvCb( uint8_t event_code, uint8_t *buf, uint8_t len )
+{
+    std::cout << __func__ << ":" << __LINE__ << std::endl;
+}
+
+
+static bt_callbacks_t sBluetoothCallbacks = {
+    sizeof( sBluetoothCallbacks ),
+    AdapterStateChangeCb,
+    AdapterPropertiesCb,
+    RemoteDevicePropertiesCb,
+    DeviceFoundCb,
+    DiscoveryStateChangedCb,
+    PinRequestCb,
+    SspRequestCb,
+    BondStateChangedCb,
+    AclStateChangedCb,
+    CbThreadEvent,
+    DutModeRecvCb,
+    LeTestModeRecvCb,
+    EnergyInfoRecvCb,
+    HCIEventRecvCb,
+};
+
+
+
+
+
+// Callback that triggers once client is registered
     static void RegisterClientCallback(int status, int client_if, bt_uuid_t *app_uuid) {
         std::cout << "Registered! uuid:0x";
         for( int i = 0; i < 16; i++ ) {
@@ -139,6 +230,13 @@ namespace { // anonymous namespace to prevent pollution
         s_client_if = client_if;
         client_registered = true;
     }
+
+
+} // end anonymous namespace
+
+
+
+    
 
 
 
