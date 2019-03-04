@@ -40,7 +40,11 @@ int main(int argc, char **argv)
     std::cout << "'sup folks" << std::endl;
     std::cout << "gonna wait for a signal..." << std::endl;
     pause();
+    
+    BTShutdown();
+
     durf("i hope you have...A NICE DAY >:-(");
+
     return 0;
 }
 

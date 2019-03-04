@@ -14,13 +14,18 @@ extern "C"
 
 #include <memory> // in case I want to use shared_ptr
 #include <iostream> // for debug print
+#include <iomanip> // for extra debug print options
 
 
-static bt_uuid_t s_client_uuid;
-static int s_client_if( -1 );
+
 
 // ANdroind hal hardware structs
 namespace { // anonymous namespace to prevent pollution
+    
+    bt_uuid_t s_client_uuid{};
+    int s_client_if( -1 );
+    bool client_registered = false;
+    
     struct hw_device_t *pHWDevice;
     hw_module_t *pHwModule;
     bluetooth_device_t *pBTDevice;
@@ -28,10 +33,114 @@ namespace { // anonymous namespace to prevent pollution
     std::shared_ptr<btvendor_interface_t> btVendorInterface;
 
 
-    std::shared_ptr<btgatt_interface_t> m_pGATTInterface;
-    std::shared_ptr<const btgatt_server_interface_t> m_pGATTServerInterface;
-    std::shared_ptr<const btgatt_client_interface_t> m_pGATTClientInterface;
-}
+    void Shutdown() 
+    {
+        if (pBluetoothStack) {
+            pBluetoothStack->disable();
+            pBluetoothStack->cleanup();
+        }
+    }
+
+
+    // Callback that triggers once client is registered
+    void RegisterClientCallback(int status, int client_if, bt_uuid_t *app_uuid) {
+        std::cout << "Registered! uuid:0x";
+        for( int i = 0; i < 16; i++ ) {
+            std::cout << std::hex << std::setw( 2 ) << std::setfill( '0' ) << static_cast<int>( app_uuid->uu[i] );
+        }
+        std::cout << " client_if:" << client_if << std::endl;
+        s_client_if = client_if;
+        client_registered = true;
+    }
+
+
+
+
+
+    std::shared_ptr<btgatt_interface_t> pGATTInterface;
+    //std::shared_ptr<const btgatt_server_interface_t> m_pGATTServerInterface;
+    std::shared_ptr<const btgatt_client_interface_t> pGATTClientInterface;
+    
+    
+    
+    btgatt_client_callbacks_t sBTGATTClientCallbacks = {
+        NULL, //RegisterClientCallback,
+        NULL, //ScanResultCallback,
+        NULL, //ConnectClientCallback, // connect_callback
+        NULL, //DisconnectClientCallback, // disconnect_callback
+        NULL, // search_complete_callback
+        NULL, // register_for_notification_callback
+        NULL, // notify_callback
+        NULL, // read_characteristic_callback
+        NULL, // write_characteristic_callback
+        NULL, // read_descriptor_callback
+        NULL, // write_descriptor_callback
+        NULL, // execute_write_callback
+        NULL, // read_remote_rssi_callback
+        NULL, //ListenCallback,
+        NULL, //ConfigureMtuCallback, // configure_mtu_callback
+        NULL, // scan_filter_cfg_callback
+        NULL, // scan_filter_param_callback
+        NULL, // scan_filter_status_callback
+        NULL, // multi_adv_enable_callback
+        NULL, // multi_adv_update_callback
+        NULL, // multi_adv_data_callback
+        NULL, // multi_adv_disable_callback
+        NULL, // congestion_callback
+        NULL, // batchscan_cfg_storage_callback
+        NULL, // batchscan_enable_disable_callback
+        NULL, // batchscan_reports_callback
+        NULL, // batchscan_threshold_callback
+        NULL, // track_adv_event_callback
+        NULL, // scan_parameter_setup_completed_callback
+        NULL, // get_gatt_db_callback
+        NULL, // services_removed_callback
+        NULL, // services_added_callback
+};
+
+
+    btgatt_callbacks_t sBTGATTCallbacks = {
+        sizeof( sBTGATTCallbacks ),
+        &sBTGATTClientCallbacks,
+        NULL
+    };
+    
+    
+    static bt_callbacks_t sBluetoothCallbacks = {
+        sizeof( sBluetoothCallbacks ),
+        NULL, //AdapterStateChangeCb,
+        NULL, //AdapterPropertiesCb,
+        NULL, //RemoteDevicePropertiesCb,
+        NULL, //DeviceFoundCb,
+        NULL, //DiscoveryStateChangedCb,
+        NULL, //PinRequestCb,
+        NULL, //SspRequestCb,
+        NULL, //BondStateChangedCb,
+        NULL, //AclStateChangedCb,
+        NULL, //CbThreadEvent,
+        NULL, //DutModeRecvCb,
+        NULL, //LeTestModeRecvCb,
+        NULL, //EnergyInfoRecvCb,
+        NULL, //HCIEventRecvCb,
+    };
+
+    
+} // end anonymous namespace
+
+
+
+    // Callback that triggers once client is registered
+    static void RegisterClientCallback(int status, int client_if, bt_uuid_t *app_uuid) {
+        std::cout << "Registered! uuid:0x";
+        for( int i = 0; i < 16; i++ ) {
+            std::cout << std::hex << std::setw( 2 ) << std::setfill( '0' ) << static_cast<int>( app_uuid->uu[i] );
+        }
+        std::cout << " client_if:" << client_if << std::endl;
+        s_client_if = client_if;
+        client_registered = true;
+    }
+
+
 
 
 
@@ -53,23 +162,26 @@ int BTSetup()
     {
         pBTDevice->common.close( ( hw_device_t * ) & pBTDevice->common );
         pBTDevice = NULL;
-        //Shutdown();
+        Shutdown();
         std::cout << "IT BLEW UPPPP" << std::endl;
         return 1;
     }
     std::cout << "BT has been set UP." << std::endl;
-    return 0;
-}
-
-
-void CreateAdaptors()
-{
-
+    
+    
     // Do I need to reimplement this? or can I leave it?
     // FluorideBluetoothDEVMAdapter::StackInitialize( m_pBluetoothStack );
 
-    auto ptr = pBluetoothStack->get_profile_interface( BT_PROFILE_VENDOR_ID );
-    btVendorInterface.reset( ( btvendor_interface_t* )ptr );
+    pBluetoothStack->init(&sBluetoothCallbacks);
+    //pBluetoothStack->init(NULL);
+    std::cout << "-1" << std::endl;
+    pBluetoothStack->enable(true);
+    std::cout << "0" << std::endl;
+    
+    //auto ptr = pBluetoothStack->get_profile_interface( BT_PROFILE_VENDOR_ID );
+    //btVendorInterface.reset( ( btvendor_interface_t* )ptr );
+    std::cout << "1" << std::endl;
+    
 
     //m_logger.LogInfo( "Vendor interface: %p", ptr );
     //m_pDEVM_Adapter = std::make_shared<FluorideBluetoothDEVMAdapter>( m_pBluetoothStack, m_btVendorInterface, m_frontdoor, m_task );
@@ -81,9 +193,41 @@ void CreateAdaptors()
 
     // THIS IS WHERE WE DIP INTO GATTLAND
     //m_pGATT_Adapter = std::make_shared<FluorideBluetoothGATTAdapter>( m_pBluetoothStack, m_btVendorInterface );
+    
+    
+    pGATTInterface.reset( ( btgatt_interface_t* ) pBluetoothStack->get_profile_interface( BT_PROFILE_GATT_ID ) );
+    //pGATTInterface = std::make_shared<btgatt_interface_t*>(pBluetoothStack->get_profile_interface( BT_PROFILE_GATT_ID ) );
+    std::cout << "1.5" << std::endl;
+    if (!pGATTInterface) {
+        std::cout << "GRABBIN THE GATT INTERFACE WENT SCREWBALLLZ" << std::endl;
+        Shutdown();
+        return 1;
+    }
+    pGATTInterface->init( &sBTGATTCallbacks );
+    std::cout << "2" << std::endl;
+    //pGATTServerInterface.reset( m_pGATTInterface->server );
+    pGATTClientInterface.reset( pGATTInterface->client );
+    std::cout << "3" << std::endl;
+    
+    // I dunno why uuid doesn't need to be filled out, but it works in CastleBluetooth...
+    bt_status_t result = pGATTClientInterface->register_client( &s_client_uuid );
+    
+    std::cout << "registered client, waitin for acceptance" << std::endl;
+    return 0;
 }
 
 
+int BTShutdown()
+{
+    if (!client_registered) {
+        std::cout << "no client registered, nothing to shut down!" << std::endl;
+        return 1;
+    }
+    
+    pGATTClientInterface->unregister_client(s_client_if);
+    std::cout << "Shutdown complete" << std::endl;
+    return 0;
+}
 
 
 /*
@@ -208,47 +352,6 @@ static btgatt_server_callbacks_t sBTGATTServerCallbacks =
 */
 
 
-static btgatt_client_callbacks_t sBTGATTClientCallbacks =
-{
-    NULL, //RegisterClientCallback,
-    NULL, //ScanResultCallback,
-    NULL, //ConnectClientCallback, // connect_callback
-    NULL, //DisconnectClientCallback, // disconnect_callback
-    NULL, // search_complete_callback
-    NULL, // register_for_notification_callback
-    NULL, // notify_callback
-    NULL, // read_characteristic_callback
-    NULL, // write_characteristic_callback
-    NULL, // read_descriptor_callback
-    NULL, // write_descriptor_callback
-    NULL, // execute_write_callback
-    NULL, // read_remote_rssi_callback
-    NULL, //ListenCallback,
-    NULL, //ConfigureMtuCallback, // configure_mtu_callback
-    NULL, // scan_filter_cfg_callback
-    NULL, // scan_filter_param_callback
-    NULL, // scan_filter_status_callback
-    NULL, // multi_adv_enable_callback
-    NULL, // multi_adv_update_callback
-    NULL, // multi_adv_data_callback
-    NULL, // multi_adv_disable_callback
-    NULL, // congestion_callback
-    NULL, // batchscan_cfg_storage_callback
-    NULL, // batchscan_enable_disable_callback
-    NULL, // batchscan_reports_callback
-    NULL, // batchscan_threshold_callback
-    NULL, // track_adv_event_callback
-    NULL, // scan_parameter_setup_completed_callback
-    NULL, // get_gatt_db_callback
-    NULL, // services_removed_callback
-    NULL, // services_added_callback
-};
 
-
-static btgatt_callbacks_t sBTGATTCallbacks = {
-    sizeof( sBTGATTCallbacks ),
-    &sBTGATTClientCallbacks,
-    NULL
-};
 
 
