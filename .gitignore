@@ -31,5 +31,6 @@
 *.out
 *.app
 
-# Editor backup files
+# Editor files
 *~
+.vscode

@@ -12,9 +12,23 @@ extern "C"
 #include "hardware/vendor.h"
 }
 
+//#include <signal.h> 
 #include <memory> // in case I want to use shared_ptr
 #include <iostream> // for debug print
 #include <iomanip> // for extra debug print options
+#include <string.h> // for strerror()
+#include <errno.h> // for errno
+#include <unistd.h> // for access()
+
+
+// Trying to get some info on how the program exits
+struct surround_main {
+    surround_main() {std::cout << __func__ << ":Pre-main()!" << std::endl;}
+    ~surround_main() {std::cout << __func__ << ":Post-main()!" << std::endl;}
+};
+static surround_main surroundie;
+
+
 
 
 
@@ -64,7 +78,7 @@ namespace { // anonymous namespace to prevent pollution
     
     
     btgatt_client_callbacks_t sBTGATTClientCallbacks = {
-        NULL, //RegisterClientCallback,
+        RegisterClientCallback,
         NULL, //ScanResultCallback,
         NULL, //ConnectClientCallback, // connect_callback
         NULL, //DisconnectClientCallback, // disconnect_callback
@@ -97,12 +111,32 @@ namespace { // anonymous namespace to prevent pollution
         NULL, // services_removed_callback
         NULL, // services_added_callback
 };
-
+/*
+static btgatt_server_callbacks_t sBTGATTServerCallbacks =
+{
+    NULL, //RegisterServerCallback,
+    NULL, //ConnectionCallback,
+    NULL, //ServiceAddedCallback,
+    NULL, //IncludedServiceAddedCallback,
+    NULL, //CharacteristicAddedCallback,
+    NULL, //DescriptorAddedCallback,
+    NULL, //ServiceStartedCallback,
+    NULL, //ServiceStoppedCallback,
+    NULL, //ServiceDeletedCallback,
+    NULL, //RequestReadCallback,
+    NULL, //RequestWriteCallback,
+    NULL, //RequestExecWriteCallback,
+    NULL, //ResponseConfirmationCallback,
+    NULL, //IndicationSentCallback,
+    NULL, //CongestionCallback,
+    NULL, //MtuChangedCallback
+};
+*/
 
     btgatt_callbacks_t sBTGATTCallbacks = {
         sizeof( sBTGATTCallbacks ),
         &sBTGATTClientCallbacks,
-        NULL
+        NULL, //&sBTGATTServerCallbacks,
     };
     
     /*
@@ -130,6 +164,7 @@ namespace { // anonymous namespace to prevent pollution
 static void AdapterStateChangeCb( bt_state_t state )
 {
     std::cout << __func__ << ":" << __LINE__ << std::endl;
+    std::cout << "Fluoride Stack " << ((BT_STATE_ON == state) ? "enabled" : "disabled") << std::endl;
 }
 
 static void AdapterPropertiesCb( bt_status_t status, int num_properties, bt_property_t *properties )
@@ -220,18 +255,6 @@ static bt_callbacks_t sBluetoothCallbacks = {
 
 
 
-// Callback that triggers once client is registered
-    static void RegisterClientCallback(int status, int client_if, bt_uuid_t *app_uuid) {
-        std::cout << "Registered! uuid:0x";
-        for( int i = 0; i < 16; i++ ) {
-            std::cout << std::hex << std::setw( 2 ) << std::setfill( '0' ) << static_cast<int>( app_uuid->uu[i] );
-        }
-        std::cout << " client_if:" << client_if << std::endl;
-        s_client_if = client_if;
-        client_registered = true;
-    }
-
-
 } // end anonymous namespace
 
 
@@ -242,15 +265,47 @@ static bt_callbacks_t sBluetoothCallbacks = {
 
 
 
-extern   hw_module_t HAL_MODULE_INFO_SYM; // WWWWHYYYY ?????!
+//extern   hw_module_t HAL_MODULE_INFO_SYM; // WWWWHYYYY ?????!
 int BTSetup() 
 {
-    pHwModule = &HAL_MODULE_INFO_SYM;
+
+    static char const btprop_socket[] = "/data/misc/bluetooth/btprop";
+    /*if (remove(btprop_socket) !=0) {
+        std::cout << "the socket could not be removed: " << strerror(errno) << std::endl;
+    }
+    std::cout << "removed socket" << std::endl;
+    */
+    
+    int accessible = 0;
+    for(int wait=0; wait<60; ++wait) {
+        int accessible = access(btprop_socket, F_OK);
+        if (accessible != 0) {
+            std::cout << "BT socket not found: " << strerror(errno) << std::endl;
+            sleep(1);
+        }
+    }
+    if (accessible != 0) {
+        std::cout << "BT SOCKET IS IN LIMBOOOOO" << std::endl;
+        return 1;
+    }
+    std::cout << "bt socket found!" << std::endl;
+    
 
 
-    if( pHwModule->methods->open( pHwModule, BT_STACK_MODULE_ID, &pHWDevice ) )
-    {
-        std::cout << "BT Stack hw module retrieved." << std::endl;
+    hw_module_t *pHwModule;
+
+    int result = hw_get_module (BT_STACK_MODULE_ID, (hw_module_t const **) &pHwModule);
+    if (result != 0) {
+        std::cout << "module could NOT be GOT" << std::endl;
+        return 1;
+    }    
+    
+    //pHwModule = &HAL_MODULE_INFO_SYM;
+
+    result = pHwModule->methods->open(pHwModule, BT_STACK_MODULE_ID, &pHWDevice);
+    if (result != 0) {
+        std::cout << "BT Stack hw module got messed uppppp." << std::endl;
+        return 1;
     }
 
     pBTDevice = reinterpret_cast<bluetooth_device_t*>(pHWDevice);
@@ -268,47 +323,33 @@ int BTSetup()
     
     
     // Do I need to reimplement this? or can I leave it?
-    // FluorideBluetoothDEVMAdapter::StackInitialize( m_pBluetoothStack );
-
-    pBluetoothStack->init(&sBluetoothCallbacks);
+    result = pBluetoothStack->init(&sBluetoothCallbacks); // if /usr/bin/btproperty is not running, this will exit your program!
+    if (result != BT_STATUS_SUCCESS) {
+        std::cout << "OH CRAP: " << result << std::endl;
+        Shutdown();
+        std::cout << "IT BLEW UPPPP" << std::endl;
+        return 1;
+    }
     //pBluetoothStack->init(NULL);
-    std::cout << "-1" << std::endl;
+
     pBluetoothStack->enable(true);
-    std::cout << "0" << std::endl;
     
+    // I'm not using the vendor stuff right now so no need for this yet
     //auto ptr = pBluetoothStack->get_profile_interface( BT_PROFILE_VENDOR_ID );
     //btVendorInterface.reset( ( btvendor_interface_t* )ptr );
-    std::cout << "1" << std::endl;
-    
-
-    //m_logger.LogInfo( "Vendor interface: %p", ptr );
-    //m_pDEVM_Adapter = std::make_shared<FluorideBluetoothDEVMAdapter>( m_pBluetoothStack, m_btVendorInterface, m_frontdoor, m_task );
-    //m_ProfileAdapterList.push_back( m_pDEVM_Adapter );
-
-    //m_pA2DP_Adapter = std::make_shared<FluorideBluetoothA2DPAdapter>( m_pBluetoothStack, m_pAudioServer );
-    //m_ProfileAdapterList.push_back( m_pA2DP_Adapter );
-
-
-    // THIS IS WHERE WE DIP INTO GATTLAND
-    //m_pGATT_Adapter = std::make_shared<FluorideBluetoothGATTAdapter>( m_pBluetoothStack, m_btVendorInterface );
-    
     
     pGATTInterface.reset( ( btgatt_interface_t* ) pBluetoothStack->get_profile_interface( BT_PROFILE_GATT_ID ) );
     //pGATTInterface = std::make_shared<btgatt_interface_t*>(pBluetoothStack->get_profile_interface( BT_PROFILE_GATT_ID ) );
-    std::cout << "1.5" << std::endl;
     if (!pGATTInterface) {
         std::cout << "GRABBIN THE GATT INTERFACE WENT SCREWBALLLZ" << std::endl;
         Shutdown();
         return 1;
     }
     pGATTInterface->init( &sBTGATTCallbacks );
-    std::cout << "2" << std::endl;
-    //pGATTServerInterface.reset( m_pGATTInterface->server );
     pGATTClientInterface.reset( pGATTInterface->client );
-    std::cout << "3" << std::endl;
     
     // I dunno why uuid doesn't need to be filled out, but it works in CastleBluetooth...
-    bt_status_t result = pGATTClientInterface->register_client( &s_client_uuid );
+    result = pGATTClientInterface->register_client(&s_client_uuid);
     
     std::cout << "registered client, waitin for acceptance" << std::endl;
     return 0;
@@ -317,13 +358,19 @@ int BTSetup()
 
 int BTShutdown()
 {
-    if (!client_registered) {
-        std::cout << "no client registered, nothing to shut down!" << std::endl;
-        return 1;
-    }
+    //if (!client_registered) {
+    //    std::cout << "no client registered, nothing to shut down!" << std::endl;
+    //    return 1;
+    //}
     
     pGATTClientInterface->unregister_client(s_client_if);
+    pBluetoothStack->disable();
+    pBluetoothStack->cleanup();
+    pBluetoothStack.reset();
+    pBTDevice->common.close( ( hw_device_t * ) & pBTDevice->common );
+    pBTDevice = NULL;
     std::cout << "Shutdown complete" << std::endl;
+    
     return 0;
 }
 
