@@ -301,7 +301,7 @@ extern   hw_module_t HAL_MODULE_INFO_SYM; // WWWWHYYYY ?????!
 int BTSetup() 
 {
 
-    memset( s_client_uuid.uu, 0xDA, sizeof( s_client_uuid.uu ) );
+    //memset( s_client_uuid.uu, 0xDA, sizeof( s_client_uuid.uu ) );
 
     pid_t pid = btprop_is_running();
     if (!pid) {
@@ -354,6 +354,16 @@ int BTSetup()
     //auto ptr = pBluetoothStack->get_profile_interface( BT_PROFILE_VENDOR_ID );
     //btVendorInterface.reset( ( btvendor_interface_t* )ptr );
     
+    // BT STACK NEEDS TO ENABLE BEFORE WE CAN CONTINUE
+    // TODO: Make this based on the AdapterStateChangeCb firing
+    const int WAIT_TIME=3;
+    std::cout << "Waitin for " << WAIT_TIME << " secs before settin up GATT" << std::endl;
+    for (int i=1;i<=WAIT_TIME;++i) {
+        sleep(1);
+        std::cout << i << "..." << std::endl;
+    }
+    std::cout << "DONE WAITIN" << std::endl;
+
     pGATTInterface.reset( (btgatt_interface_t*)pBluetoothStack->get_profile_interface( BT_PROFILE_GATT_ID ) );
     //pGATTInterface = std::make_shared<btgatt_interface_t*>(pBluetoothStack->get_profile_interface( BT_PROFILE_GATT_ID ) );
     if (!pGATTInterface) {
