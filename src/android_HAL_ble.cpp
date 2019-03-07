@@ -37,6 +37,10 @@ namespace { // anonymous namespace to prevent pollution
     bt_uuid_t s_client_uuid{};
     int s_client_if( -1 );
     bool client_registered = false;
+
+
+    // flouride stack state
+    bool s_fluoride_on = false;
     
     struct hw_device_t *pHWDevice;
     hw_module_t *pHwModule;
@@ -136,6 +140,7 @@ static void AdapterStateChangeCb( bt_state_t state )
 {
     std::cout << __func__ << ":" << __LINE__ << std::endl;
     std::cout << "Fluoride Stack " << ((BT_STATE_ON == state) ? "enabled" : "disabled") << std::endl;
+    s_fluoride_on = (BT_STATE_ON == state);
 }
 
 static void AdapterPropertiesCb( bt_status_t status, int num_properties, bt_property_t *properties )
@@ -356,12 +361,13 @@ int BTSetup()
     
     // BT STACK NEEDS TO ENABLE BEFORE WE CAN CONTINUE
     // TODO: Make this based on the AdapterStateChangeCb firing
-    const int WAIT_TIME=3;
-    std::cout << "Waitin for " << WAIT_TIME << " secs before settin up GATT" << std::endl;
-    for (int i=1;i<=WAIT_TIME;++i) {
-        sleep(1);
-        std::cout << i << "..." << std::endl;
-    }
+    //const int WAIT_TIME=3;
+    std::cout << "Waitin for bt to set up before settin up GATT" << std::endl;
+    //for (int i=1;i<=WAIT_TIME;++i) {
+    //    sleep(1);
+    //    std::cout << i << "..." << std::endl;
+    //}
+    while(!s_fluoride_on);
     std::cout << "DONE WAITIN" << std::endl;
 
     pGATTInterface.reset( (btgatt_interface_t*)pBluetoothStack->get_profile_interface( BT_PROFILE_GATT_ID ) );
