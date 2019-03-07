@@ -16,6 +16,16 @@
 //#include "bluetooth.h"
 
 
+
+// Trying to get some info on how the program exits
+struct surround_main {
+    surround_main() {std::cout << __func__ << ":Pre-main()!" << std::endl;}
+    ~surround_main() {std::cout << __func__ << ":Post-main()!" << std::endl;}
+};
+static surround_main surroundie;
+
+
+
 static volatile sig_atomic_t sig_caught = 0;
 
 
@@ -32,23 +42,23 @@ int main(int argc, char **argv)
     // Set up signal handling
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
+    signal(SIGABRT, signal_handler);
 
     // Printing PID makes it easier to send SIGTERM
     std::cout << "Process ID: " << getpid() << std::endl;
     
     // What's this?? A BLUETOOTH CALLLLL?????? :-O
-    BTSetup();
-
+    if (0 != BTSetup()) {
+        std::cout << "No BT for you today!" << std::endl;
+        exit(1);
+    }
+    
 
     // Meat of program
     std::cout << "'sup folks" << std::endl;
     std::cout << "gonna wait for a signal..." << std::endl;
-    //pause(); // Holds until signal recieved
+    pause(); // Holds until signal recieved
     
-    //while(sig_caught == 0) {
-     //   sleep(1);
-    //}
-
     BTShutdown();
     durf("i hope you have...A NICE DAY >:-(");
 
