@@ -24,6 +24,7 @@ extern "C"
 #include <string.h> // for strerror()
 #include <errno.h> // for errno
 #include <unistd.h> // for access()
+#include <time.h> // for time()
 
 #include <signal.h> // for raise()
 
@@ -54,7 +55,9 @@ namespace { // anonymous namespace to prevent pollution
     struct hw_device_t *pHWDevice;
     hw_module_t *pHwModule;
     bluetooth_device_t *pBTDevice;
-    std::shared_ptr<bt_interface_t> pBluetoothStack;
+    //std::shared_ptr<bluetooth_device_t> pBTDevice;
+    //std::shared_ptr<const bt_interface_t> pBluetoothStack;
+    std::shared_ptr<const bt_interface_t> pBluetoothStack;
     std::shared_ptr<btvendor_interface_t> btVendorInterface;
 
     // GATT
@@ -144,12 +147,14 @@ namespace { // anonymous namespace to prevent pollution
         }
 
         // Only print if we got a name
-        if (!name.empty()) {
-            std::cout << ss.str() << std::endl;
-        }
+        //
+        //if (!name.empty()) {
+        //    std::cout << ss.str() << std::endl;
+        //}
 
         // PACK IT IN, BOYS
         if (name_match && manuf_id_match) {
+            std::cout << ss.str() << std::endl;
             std::cout << "Found rubeus buds!" << std::endl;
             time_to_stop = true;
         }
@@ -252,7 +257,7 @@ namespace { // anonymous namespace to prevent pollution
 
 static void AdapterStateChangeCb( bt_state_t state )
 {
-    std::cout << __func__ << ":" << __LINE__ << std::endl;
+    //std::cout << __func__ << ":" << __LINE__ << std::endl;
     std::cout << "Fluoride Stack " << ((BT_STATE_ON == state) ? "enabled" : "disabled") << std::endl;
     s_fluoride_on = (BT_STATE_ON == state);
 }
@@ -294,12 +299,14 @@ static void BondStateChangedCb( bt_status_t status, bt_bdaddr_t *bd_addr, bt_bon
 
 static void AclStateChangedCb( bt_status_t status, bt_bdaddr_t *bd_addr, bt_acl_state_t state )
 {
-    std::cout << __func__ << ":" << __LINE__ << std::endl;
+    //std::cout << __func__ << ":" << __LINE__ << std::endl;
+    std::cout << "Fluoride Stack acl " << ((BT_ACL_STATE_CONNECTED == state) ? "connected" : "disconnected") << std::endl;
 }
 
 static void CbThreadEvent( bt_cb_thread_evt event )
 {
-    std::cout << __func__ << ":" << __LINE__ << std::endl;
+    //std::cout << __func__ << ":" << __LINE__ << std::endl;
+    std::cout << "Upper level JVM has been " << ((event == ASSOCIATE_JVM) ? "associated" : "disassociated") << std::endl;
 }
 
 static void DutModeRecvCb( uint16_t opcode, uint8_t *buf, uint8_t len )
@@ -416,7 +423,7 @@ namespace {
 
 
 
-extern   hw_module_t HAL_MODULE_INFO_SYM; // WWWWHYYYY ?????!
+//extern   hw_module_t HAL_MODULE_INFO_SYM; // WWWWHYYYY ?????!
 int BTSetup() 
 {
 
@@ -430,14 +437,14 @@ int BTSetup()
     
     int result;
     hw_module_t *pHwModule;
-    /*
-    result = hw_get_module (BT_STACK_MODULE_ID, (hw_module_t const **) &pHwModule);
+    
+    result = hw_get_module(BT_STACK_MODULE_ID, (hw_module_t const **) &pHwModule);
     if (result != 0) {
         std::cout << "module could NOT be GOT" << std::endl;
         return 1;
-    } */   
+    }    
     
-    pHwModule = &HAL_MODULE_INFO_SYM;
+    //pHwModule = &HAL_MODULE_INFO_SYM;
 
     result = pHwModule->methods->open(pHwModule, BT_STACK_MODULE_ID, &pHWDevice);
     if (result != 0) {
@@ -446,7 +453,10 @@ int BTSetup()
     }
 
     pBTDevice = reinterpret_cast<bluetooth_device_t*>(pHWDevice);
-    pBluetoothStack = std::make_shared<bt_interface_t>( *pBTDevice->get_bluetooth_interface() );
+    //pBTDevice = (bluetooth_device_t*)(pHWDevice);
+
+    pBluetoothStack = std::make_shared<bt_interface_t>(*pBTDevice->get_bluetooth_interface());
+    //pBluetoothStack.reset(pBTDevice->get_bluetooth_interface());
 
     if( !pBluetoothStack )
     {
@@ -512,14 +522,20 @@ int BTSetup()
 }
 
 
-int BTConnect()
+
+// TODO: Timeout doesn't work!
+int BTConnect(int timeout)
 {
     s_GATT_client_interface->scan(true);
     std::cout << "started scanning..." << std::endl;
-    while (!s_found_device);
-    std::cout << "Found it!" << std::endl;
-    
-    
+    time_t start = time(nullptr);
+    while (/*((timeout >= 0) && (time(nullptr) > start + timeout)) ||*/ !s_found_device);
+    if(!s_found_device) {
+        s_GATT_client_interface->scan(false);
+        std::cout << "Timed out while scanning!" << std::endl;
+        return -1;
+    }
+    std::cout << "Found device!" << std::endl;
     s_GATT_client_interface->connect(s_client_if, s_bda.get(), true, 0);
     return 0;
 

@@ -53,7 +53,7 @@ int main(int argc, char **argv)
         exit(1);
     }
 
-    if (0 != BTConnect()) {
+    if (0 != BTConnect(5)) {
         std::cout << "blergh, no connectie" << std::endl;
         BTShutdown();
         exit(1);
