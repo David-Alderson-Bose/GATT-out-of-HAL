@@ -18,6 +18,9 @@ extern "C"
 #include <memory> // in case I want to use shared_ptr
 #include <iostream> // for debug print
 #include <iomanip> // for extra debug print options
+#include <atomic>
+#include <sstream>
+
 #include <string.h> // for strerror()
 #include <errno.h> // for errno
 #include <unistd.h> // for access()
@@ -34,13 +37,19 @@ extern "C"
 // Androind hal hardware structs
 namespace { // anonymous namespace to prevent pollution
     
+    // Connection details
     bt_uuid_t s_client_uuid{};
-    int s_client_if( -1 );
-    bool client_registered = false;
+    std::shared_ptr<bt_bdaddr_t> s_bda;
+    std::atomic_int s_client_if(-1);
+    std::atomic_int s_conn_id(-1);
+    
+    std::atomic_bool s_client_registered(false);
+    std::atomic_bool s_found_device(false);
+    std::atomic_bool s_client_connected(false);
 
 
     // flouride stack state
-    bool s_fluoride_on = false;
+    std::atomic_bool s_fluoride_on(false);
     
     struct hw_device_t *pHWDevice;
     hw_module_t *pHwModule;
@@ -48,35 +57,140 @@ namespace { // anonymous namespace to prevent pollution
     std::shared_ptr<bt_interface_t> pBluetoothStack;
     std::shared_ptr<btvendor_interface_t> btVendorInterface;
 
+    // GATT
+    std::shared_ptr<btgatt_interface_t> pGATTInterface;
+    //std::shared_ptr<const btgatt_server_interface_t> m_pGATTServerInterface;
+    std::shared_ptr<const btgatt_client_interface_t> s_GATT_client_interface;
 
 
     // Callback that triggers once client is registered
-    static void RegisterClientCallback(int status, int client_if, bt_uuid_t *app_uuid) {
+    void RegisterClientCallback(int status, int client_if, bt_uuid_t *app_uuid) {
         std::cout << "Registered! uuid:0x";
         for( int i = 0; i < 16; i++ ) {
             std::cout << std::hex << std::setw( 2 ) << std::setfill( '0' ) << static_cast<int>( app_uuid->uu[i] );
         }
-        std::cout << " client_if:" << client_if << std::endl;
+        std::cout << " client_if:" << client_if << std::endl << std::flush;
         s_client_if = client_if;
-        client_registered = true;
+        s_client_registered = true;
     }
 
 
+    // Callback when scan results are found
+    void ScanResultCallback(bt_bdaddr_t* bda, int rssi, uint8_t* adv_data) {
+        static const int ADV_DATA_MAX_LEN = 32;
+        static const uint8_t COMPLETE_LOCAL_NAME_FLAG = 0x09;
 
+        // Search specific stuff
+        static const uint8_t ON_SEMI_ID[] {0x62, 0x03, 0x03, '\0'};
+        static const std::string RUBEUS_NAME_HEADER( "RubeusBT" );
 
+        bool name_match = false;
+        bool manuf_id_match = false;
 
+        static int count = 1;
+        bool time_to_stop = false;
+        std::string name;
+        uint8_t manuf_id[] {0, 0, 0, '\0'};
+        int loc = 0;
 
-    std::shared_ptr<btgatt_interface_t> pGATTInterface;
-    //std::shared_ptr<const btgatt_server_interface_t> m_pGATTServerInterface;
-    std::shared_ptr<const btgatt_client_interface_t> pGATTClientInterface;
+        // Accumulate info in a stringstream
+        std::stringstream ss;
+        ss << std::dec << count << ". ";
+
+        // Parse address
+        for (int field = 0; field < 6; ++field) {
+            ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(bda->address[field]);
+            if (field < 5) {
+                ss << ":";
+            }
+        }
+
+        // Read advertising packet
+        while (loc < ADV_DATA_MAX_LEN) {
+            std::size_t len = adv_data[loc];
+            if (len == 0 || len + loc > ADV_DATA_MAX_LEN) {
+                break;
+            }
+            ss << std::dec << " | Len: " << len;
+            uint8_t type = adv_data[loc + 1];
+            ss << " Type: " << std::hex << "0x" << static_cast<int>( type );
+
+            // check if type is shortened local name or complete local name
+            if(type == 0x08 || type == 0x09) {
+                name.assign(reinterpret_cast<char*>(adv_data) + loc + 2, len - 1);
+                ss << " Name: " << name;
+                std::size_t found = name.find(RUBEUS_NAME_HEADER);
+                if (found != std::string::npos) {
+                    name_match = true;
+                }
+            }
+            else if (type == 0xFF) {   // manufacturer ID
+                ss << " Manuf. ID: 0x";
+                for (int i = 0; i < 3; i++) {
+                    manuf_id[i] = adv_data[loc + 2 + i];
+                    ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(manuf_id[i]);
+                }
+                int match = strcmp(reinterpret_cast<const char*>(ON_SEMI_ID), reinterpret_cast<char*>(manuf_id));
+                if (match == 0) {
+                    manuf_id_match = true;
+                }
+            } else {
+                ss << std::hex << " Data: 0x";
+                for (int i = 1; i < len; ++i) {
+                    ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(adv_data[loc + i]);
+                }
+            }
+            loc += ( len + 1 );
+        }
+
+        // Only print if we got a name
+        if (!name.empty()) {
+            std::cout << ss.str() << std::endl;
+        }
+
+        // PACK IT IN, BOYS
+        if (name_match && manuf_id_match) {
+            std::cout << "Found rubeus buds!" << std::endl;
+            time_to_stop = true;
+        }
+
+        // Call back into class to stop scanning
+        if (time_to_stop && s_GATT_client_interface) {
+            s_GATT_client_interface->scan(false);
+            //p_gattthis->Connect( s_client_if, bda );
+            s_bda.reset(bda);
+            s_found_device = true;
+        }
+        ++count;
+    }
     
-    
-    
+
+    void ConnectClientCallback(int conn_id, int status, int client_if, bt_bdaddr_t* bda) {
+        std::cout << "WOOOOOO CONNECTEDDDDDDD, client_if:" << client_if << " conn_id: " << conn_id << "uuid:0x";
+        for (int i = 0; i < 16; i++) {
+            std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(bda->address[i]);
+        }
+        std::cout << std::endl;
+        s_conn_id = conn_id;
+        s_client_connected = true;
+    }
+
+
+    void DisconnectClientCallback(int conn_id, int status, int client_if, bt_bdaddr_t* bda) {
+        std::cout << "D_I_S_C_O_N_N_E_C_T_E_D, client_if:" << client_if << " conn_id: " << conn_id << "uuid:0x";
+        for (int i = 0; i < 16; i++) {
+            std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(bda->address[i]);
+        }
+        std::cout << std::endl;
+        s_client_connected = false;
+    }
+
+
     btgatt_client_callbacks_t sBTGATTClientCallbacks = {
         RegisterClientCallback,
-        NULL, //ScanResultCallback,
-        NULL, //ConnectClientCallback, // connect_callback
-        NULL, //DisconnectClientCallback, // disconnect_callback
+        ScanResultCallback,
+        ConnectClientCallback, // connect_callback
+        DisconnectClientCallback, // disconnect_callback
         NULL, // search_complete_callback
         NULL, // register_for_notification_callback
         NULL, // notify_callback
@@ -383,34 +497,58 @@ int BTSetup()
         std::cout << __LINE__ << " oh crap!" << std::endl;
     }
     
-    pGATTClientInterface.reset(pGATTInterface->client);
+    s_GATT_client_interface.reset(pGATTInterface->client);
 
     // I dunno why uuid doesn't need to be filled out, but it works in CastleBluetooth...
-    result = pGATTClientInterface->register_client(&s_client_uuid);
-    if (!pGATTClientInterface || result != BT_STATUS_SUCCESS) {
+    result = s_GATT_client_interface->register_client(&s_client_uuid);
+    if (!s_GATT_client_interface || result != BT_STATUS_SUCCESS) {
         std::cout << __LINE__ << " oh crap! error: " << result << std::endl;
     } else {
     }
-    std::cout << "registered client, waitin for acceptance" << std::endl;
+    std::cout << "registered client, waitin for acceptance..." << std::endl;
+    while(!s_client_registered);
+    std::cout << "CLIENT REGISTERED" << std::endl;
     return 0;
 }
 
 
+int BTConnect()
+{
+    s_GATT_client_interface->scan(true);
+    std::cout << "started scanning..." << std::endl;
+    while (!s_found_device);
+    std::cout << "Found it!" << std::endl;
+    
+    
+    s_GATT_client_interface->connect(s_client_if, s_bda.get(), true, 0);
+    return 0;
+
+}
+
+
+
+
 int BTShutdown()
 {
-    if (client_registered) {
-        std::cout << "unregistering client" << std::endl;
-        pGATTClientInterface->unregister_client(s_client_if);
-        client_registered = false;
+    if (s_client_connected) {
+        std::cout << "disconnecting client" << std::endl;
+        s_GATT_client_interface->disconnect(s_client_if, s_bda.get(), s_conn_id);
+        while(s_client_connected); // Wait for disconnect
     }
     
-   //pGATTClientInterface->unregister_client(s_client_if);
+    if (s_client_registered) {
+        std::cout << "unregistering client" << std::endl;
+        s_GATT_client_interface->unregister_client(s_client_if);
+        s_client_registered = false;
+    }
+    
+   //s_GATT_client_interface->unregister_client(s_client_if);
     
     if (pGATTInterface) {
         std::cout << "Cleaning up GATT object..." << std::endl;
         //pGATTInterface->cleanup(); // This segfaults
         //pGATTInterface.reset();    // This also sefgaults!
-        //...but without them I get a bus error???
+        //...but with them I get a bus error???
     }
     if (pBluetoothStack) {
         std::cout << "Cleaning up bluetooth stack object..." << std::endl;
@@ -490,15 +628,15 @@ void FluorideBluetoothGATTAdapter::Initialize( const BTDefines::SendEventToManag
     m_pGATTInterface.reset( ( btgatt_interface_t* ) m_pBluetoothStack->get_profile_interface( BT_PROFILE_GATT_ID ) );
     m_pGATTInterface->init( &sBTGATTCallbacks );
     m_pGATTServerInterface.reset( m_pGATTInterface->server );
-    m_pGATTClientInterface.reset( m_pGATTInterface->client );
-    m_pCommandAdapter = std::make_shared<FluorideBluetoothCommandGATTAdapter>( m_task, m_pBluetoothStack, m_pGATTServerInterface, m_pGATTClientInterface, m_btVendorInterface );
+    m_s_GATT_client_interface.reset( m_pGATTInterface->client );
+    m_pCommandAdapter = std::make_shared<FluorideBluetoothCommandGATTAdapter>( m_task, m_pBluetoothStack, m_pGATTServerInterface, m_s_GATT_client_interface, m_btVendorInterface );
     p_gattthis = shared_from_this();
     m_pCommandAdapter->Initialize( cb );
 
     // NEW STUFF
     memset( s_client_uuid.uu, 0xDA, sizeof( s_client_uuid.uu ) );
-    //m_pGATTClientInterface->register_client( &s_client_uuid );
-    m_pGATTClientInterface->scan( true );
+    //m_s_GATT_client_interface->register_client( &s_client_uuid );
+    m_s_GATT_client_interface->scan( true );
 }
 
 

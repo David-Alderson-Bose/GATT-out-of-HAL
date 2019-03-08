@@ -2,4 +2,6 @@
 
 int BTSetup();
 
+int BTConnect();
+
 int BTShutdown();

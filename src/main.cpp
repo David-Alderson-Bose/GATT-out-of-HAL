@@ -52,7 +52,12 @@ int main(int argc, char **argv)
         std::cout << "No BT for you today!" << std::endl;
         exit(1);
     }
-    
+
+    if (0 != BTConnect()) {
+        std::cout << "blergh, no connectie" << std::endl;
+        BTShutdown();
+        exit(1);
+    }
 
     // Meat of program
     std::cout << "'sup folks" << std::endl;
