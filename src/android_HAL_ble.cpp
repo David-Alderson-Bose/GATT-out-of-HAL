@@ -14,56 +14,47 @@ extern "C"
 
 #include "android_HAL_ble.hpp"
 
-//#include <signal.h> 
+
 #include <memory> // in case I want to use shared_ptr
 #include <iostream> // for debug print
 #include <iomanip> // for extra debug print options
+#include <atomic> // for bools safe from simultaneous access
+
 #include <string.h> // for strerror()
 #include <errno.h> // for errno
 #include <unistd.h> // for access()
-
 #include <signal.h> // for raise()
 
 
-
-
-
-
+// Turn this on if you believe android is powered by faeries and unicorns
+//#define USE_MYSTERIOUS_HAL_INIT
 
 
 // Androind hal hardware structs
 namespace { // anonymous namespace to prevent pollution
-    
+    // State flags
+    std::atomic_bool s_fluoride_on(false);
+    std::atomic_bool s_client_registered(false);
+
+    // BT data
     bt_uuid_t s_client_uuid{};
     int s_client_if( -1 );
-    bool client_registered = false;
-
-
-    // flouride stack state
-    bool s_fluoride_on = false;
-    
     struct hw_device_t *pHWDevice;
     hw_module_t *pHwModule;
     bluetooth_device_t *pBTDevice;
     std::shared_ptr<bt_interface_t> pBluetoothStack;
     std::shared_ptr<btvendor_interface_t> btVendorInterface;
 
-
-
     // Callback that triggers once client is registered
-    static void RegisterClientCallback(int status, int client_if, bt_uuid_t *app_uuid) {
+    void RegisterClientCallback(int status, int client_if, bt_uuid_t *app_uuid) {
         std::cout << "Registered! uuid:0x";
         for( int i = 0; i < 16; i++ ) {
-            std::cout << std::hex << std::setw( 2 ) << std::setfill( '0' ) << static_cast<int>( app_uuid->uu[i] );
+            std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(app_uuid->uu[i]);
         }
         std::cout << " client_if:" << client_if << std::endl;
         s_client_if = client_if;
-        client_registered = true;
+        s_client_registered = true;
     }
-
-
-
-
 
 
     std::shared_ptr<btgatt_interface_t> pGATTInterface;
@@ -136,101 +127,96 @@ namespace { // anonymous namespace to prevent pollution
 
 
 
-static void AdapterStateChangeCb( bt_state_t state )
-{
-    std::cout << __func__ << ":" << __LINE__ << std::endl;
-    std::cout << "Fluoride Stack " << ((BT_STATE_ON == state) ? "enabled" : "disabled") << std::endl;
-    s_fluoride_on = (BT_STATE_ON == state);
-}
+    static void AdapterStateChangeCb( bt_state_t state )
+    {
+        std::cout << __func__ << ":" << __LINE__ << std::endl;
+        std::cout << "Fluoride Stack " << ((BT_STATE_ON == state) ? "enabled" : "disabled") << std::endl;
+        s_fluoride_on = (BT_STATE_ON == state);
+    }
 
-static void AdapterPropertiesCb( bt_status_t status, int num_properties, bt_property_t *properties )
-{
-    std::cout << __func__ << ":" << __LINE__ << std::endl;
-}
+    static void AdapterPropertiesCb( bt_status_t status, int num_properties, bt_property_t *properties )
+    {
+        std::cout << __func__ << ":" << __LINE__ << std::endl;
+    }
 
-static void RemoteDevicePropertiesCb( bt_status_t status, bt_bdaddr_t *bd_addr, int num_properties, bt_property_t *properties )
-{
-    std::cout << __func__ << ":" << __LINE__ << std::endl;
-}
+    static void RemoteDevicePropertiesCb( bt_status_t status, bt_bdaddr_t *bd_addr, int num_properties, bt_property_t *properties )
+    {
+        std::cout << __func__ << ":" << __LINE__ << std::endl;
+    }
 
-static void DeviceFoundCb( int num_properties, bt_property_t *properties )
-{
-    std::cout << __func__ << ":" << __LINE__ << std::endl;
-}
+    static void DeviceFoundCb( int num_properties, bt_property_t *properties )
+    {
+        std::cout << __func__ << ":" << __LINE__ << std::endl;
+    }
 
-static void DiscoveryStateChangedCb( bt_discovery_state_t state )
-{
-    std::cout << __func__ << ":" << __LINE__ << std::endl;
-}
+    static void DiscoveryStateChangedCb( bt_discovery_state_t state )
+    {
+        std::cout << __func__ << ":" << __LINE__ << std::endl;
+    }
 
-static void PinRequestCb( bt_bdaddr_t *bd_addr, bt_bdname_t *bd_name, uint32_t cod, bool min_16_digit )
-{
-    std::cout << __func__ << ":" << __LINE__ << std::endl;
-}
-   
-static void SspRequestCb( bt_bdaddr_t *bd_addr, bt_bdname_t *bd_name, uint32_t cod, bt_ssp_variant_t pairing_variant, uint32_t pass_key )
-{
-    std::cout << __func__ << ":" << __LINE__ << std::endl;
-}
+    static void PinRequestCb( bt_bdaddr_t *bd_addr, bt_bdname_t *bd_name, uint32_t cod, bool min_16_digit )
+    {
+        std::cout << __func__ << ":" << __LINE__ << std::endl;
+    }
+    
+    static void SspRequestCb( bt_bdaddr_t *bd_addr, bt_bdname_t *bd_name, uint32_t cod, bt_ssp_variant_t pairing_variant, uint32_t pass_key )
+    {
+        std::cout << __func__ << ":" << __LINE__ << std::endl;
+    }
 
-static void BondStateChangedCb( bt_status_t status, bt_bdaddr_t *bd_addr, bt_bond_state_t state )
-{
-    std::cout << __func__ << ":" << __LINE__ << std::endl;
-}
+    static void BondStateChangedCb( bt_status_t status, bt_bdaddr_t *bd_addr, bt_bond_state_t state )
+    {
+        std::cout << __func__ << ":" << __LINE__ << std::endl;
+    }
 
-static void AclStateChangedCb( bt_status_t status, bt_bdaddr_t *bd_addr, bt_acl_state_t state )
-{
-    std::cout << __func__ << ":" << __LINE__ << std::endl;
-}
+    static void AclStateChangedCb( bt_status_t status, bt_bdaddr_t *bd_addr, bt_acl_state_t state )
+    {
+        std::cout << __func__ << ":" << __LINE__ << std::endl;
+    }
 
-static void CbThreadEvent( bt_cb_thread_evt event )
-{
-    std::cout << __func__ << ":" << __LINE__ << std::endl;
-}
+    static void CbThreadEvent( bt_cb_thread_evt event )
+    {
+        std::cout << __func__ << ":" << __LINE__ << std::endl;
+    }
 
-static void DutModeRecvCb( uint16_t opcode, uint8_t *buf, uint8_t len )
-{
-    std::cout << __func__ << ":" << __LINE__ << std::endl;
-}
+    static void DutModeRecvCb( uint16_t opcode, uint8_t *buf, uint8_t len )
+    {
+        std::cout << __func__ << ":" << __LINE__ << std::endl;
+    }
 
-static void LeTestModeRecvCb( bt_status_t status, uint16_t packet_count )
-{
-    std::cout << __func__ << ":" << __LINE__ << std::endl;
-}
+    static void LeTestModeRecvCb( bt_status_t status, uint16_t packet_count )
+    {
+        std::cout << __func__ << ":" << __LINE__ << std::endl;
+    }
 
-static void EnergyInfoRecvCb( bt_activity_energy_info *p_energy_info, bt_uid_traffic_t *uid_data )
-{
-    std::cout << __func__ << ":" << __LINE__ << std::endl;
-}
+    static void EnergyInfoRecvCb( bt_activity_energy_info *p_energy_info, bt_uid_traffic_t *uid_data )
+    {
+        std::cout << __func__ << ":" << __LINE__ << std::endl;
+    }
 
-static void HCIEventRecvCb( uint8_t event_code, uint8_t *buf, uint8_t len )
-{
-    std::cout << __func__ << ":" << __LINE__ << std::endl;
-}
-
-
-static bt_callbacks_t sBluetoothCallbacks = {
-    sizeof( sBluetoothCallbacks ),
-    AdapterStateChangeCb,
-    AdapterPropertiesCb,
-    RemoteDevicePropertiesCb,
-    DeviceFoundCb,
-    DiscoveryStateChangedCb,
-    PinRequestCb,
-    SspRequestCb,
-    BondStateChangedCb,
-    AclStateChangedCb,
-    CbThreadEvent,
-    DutModeRecvCb,
-    LeTestModeRecvCb,
-    EnergyInfoRecvCb,
-    HCIEventRecvCb,
-};
+    static void HCIEventRecvCb( uint8_t event_code, uint8_t *buf, uint8_t len )
+    {
+        std::cout << __func__ << ":" << __LINE__ << std::endl;
+    }
 
 
-
-
-
+    static bt_callbacks_t sBluetoothCallbacks = {
+        sizeof( sBluetoothCallbacks ),
+        AdapterStateChangeCb,
+        AdapterPropertiesCb,
+        RemoteDevicePropertiesCb,
+        DeviceFoundCb,
+        DiscoveryStateChangedCb,
+        PinRequestCb,
+        SspRequestCb,
+        BondStateChangedCb,
+        AclStateChangedCb,
+        CbThreadEvent,
+        DutModeRecvCb,
+        LeTestModeRecvCb,
+        EnergyInfoRecvCb,
+        HCIEventRecvCb,
+    };
 } // end anonymous namespace
 
 
@@ -296,44 +282,49 @@ namespace {
 
 }
 
-    
 
 
-
-
-
+#ifdef USE_MYSTERIOUS_HAL_INIT    
 extern   hw_module_t HAL_MODULE_INFO_SYM; // WWWWHYYYY ?????!
+#endif
+
 int BTSetup() 
 {
-
-    //memset( s_client_uuid.uu, 0xDA, sizeof( s_client_uuid.uu ) );
-
+    // Can't do anything if the bluetooth memory emulator (??) isn't running
     pid_t pid = btprop_is_running();
     if (!pid) {
         std::cout << "bt support process not running!" << std::endl;
         return 1;
     }
-    
+
+    // Used to see if android HAL calls are working OK
     int result;
+
+
+    // Get android HW accessor
     hw_module_t *pHwModule;
-    /*
-    result = hw_get_module (BT_STACK_MODULE_ID, (hw_module_t const **) &pHwModule);
+#ifdef USE_MYSTERIOUS_HAL_INIT
+    #pragma message ("Using MYSTERIOUS Android HAL init")
+    pHwModule = &HAL_MODULE_INFO_SYM;
+#else
+    #pragma message ("Using SENSIBLE Android HAL init")
+    result = hw_get_module(BT_STACK_MODULE_ID, (hw_module_t const **)&pHwModule);
     if (result != 0) {
         std::cout << "module could NOT be GOT" << std::endl;
         return 1;
-    } */   
-    
-    pHwModule = &HAL_MODULE_INFO_SYM;
+    }    
+#endif
 
+    // from HW access, get access to bluetooth
     result = pHwModule->methods->open(pHwModule, BT_STACK_MODULE_ID, &pHWDevice);
     if (result != 0) {
         std::cout << "BT Stack hw module got messed uppppp." << std::endl;
         return 1;
     }
 
+    // From ACCESS to bluetooth, get the struct representing the stack
     pBTDevice = reinterpret_cast<bluetooth_device_t*>(pHWDevice);
     pBluetoothStack = std::make_shared<bt_interface_t>( *pBTDevice->get_bluetooth_interface() );
-
     if( !pBluetoothStack )
     {
         BTShutdown();
@@ -342,8 +333,8 @@ int BTSetup()
     }
     std::cout << "BT has been set UP." << std::endl;
     
-    
-    // Do I need to reimplement this? or can I leave it?
+    // Init the BT stack for this process
+    // Whenever we ask something of the BT stack, a corresponding callback fires. Provide the callbacks.
     result = pBluetoothStack->init(&sBluetoothCallbacks); // if /usr/bin/btproperty is not running, this will exit your program!
     if (result != BT_STATUS_SUCCESS) {
         std::cout << "OH CRAP: " << result << std::endl;
@@ -351,8 +342,6 @@ int BTSetup()
         std::cout << "IT BLEW UPPPP" << std::endl;
         return 1;
     }
-
-
     pBluetoothStack->enable(true);
     
     // I'm not using the vendor stuff right now so no need for this yet
@@ -360,48 +349,52 @@ int BTSetup()
     //btVendorInterface.reset( ( btvendor_interface_t* )ptr );
     
     // BT STACK NEEDS TO ENABLE BEFORE WE CAN CONTINUE
-    // TODO: Make this based on the AdapterStateChangeCb firing
-    //const int WAIT_TIME=3;
     std::cout << "Waitin for bt to set up before settin up GATT" << std::endl;
-    //for (int i=1;i<=WAIT_TIME;++i) {
-    //    sleep(1);
-    //    std::cout << i << "..." << std::endl;
-    //}
-    while(!s_fluoride_on);
+    while(!s_fluoride_on); // This waits for the AdapterStateChange callback
     std::cout << "DONE WAITIN" << std::endl;
 
-    pGATTInterface.reset( (btgatt_interface_t*)pBluetoothStack->get_profile_interface( BT_PROFILE_GATT_ID ) );
-    //pGATTInterface = std::make_shared<btgatt_interface_t*>(pBluetoothStack->get_profile_interface( BT_PROFILE_GATT_ID ) );
+    // From the enabled BT stack, get access to GATT
+    pGATTInterface.reset((btgatt_interface_t*)pBluetoothStack->get_profile_interface(BT_PROFILE_GATT_ID));
+    std::cout << "1" << std::endl;
     if (!pGATTInterface) {
         std::cout << "GRABBIN THE GATT INTERFACE WENT SCREWBALLLZ" << std::endl;
         BTShutdown();
         return 1;
     }
     
+    // GATT also needs a suite of callbacks 
     result = pGATTInterface->init(&sBTGATTCallbacks);
+    std::cout << "2" << std::endl;
     if (result != BT_STATUS_SUCCESS) {
         std::cout << __LINE__ << " oh crap!" << std::endl;
     }
     
-    pGATTClientInterface.reset(pGATTInterface->client);
-
-    // I dunno why uuid doesn't need to be filled out, but it works in CastleBluetooth...
-    result = pGATTClientInterface->register_client(&s_client_uuid);
+    // Register client. This has a callback needed to proceed.
+    memset(s_client_uuid.uu, 0xDA, sizeof(s_client_uuid.uu));
+    result = pGATTClientInterface->register_client(&s_client_uuid); // s_client_uuid will be filled in by this call
+    std::cout << "3" << std::endl;
     if (!pGATTClientInterface || result != BT_STATUS_SUCCESS) {
         std::cout << __LINE__ << " oh crap! error: " << result << std::endl;
-    } else {
+        BTShutdown();
     }
-    std::cout << "registered client, waitin for acceptance" << std::endl;
+    
+    // GATT CLIENT NEEDS TO BE REGISTERED BEFORE WE CAN CONTINUE
+    std::cout << "Waitin for GATT client to register..." << std::endl;
+    while(!s_client_registered); // This waits for the AdapterStateChange callback
+    std::cout << "DONE WAITIN" << std::endl;
+
+
+
     return 0;
 }
 
 
 int BTShutdown()
 {
-    if (client_registered) {
+    if (s_client_registered) {
         std::cout << "unregistering client" << std::endl;
         pGATTClientInterface->unregister_client(s_client_if);
-        client_registered = false;
+        s_client_registered = false;
     }
     
    //pGATTClientInterface->unregister_client(s_client_if);
