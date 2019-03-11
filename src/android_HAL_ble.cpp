@@ -20,6 +20,7 @@ extern "C"
 #include <iomanip> // for extra debug print options
 #include <atomic>
 #include <sstream>
+#include <map>
 
 #include <string.h> // for strerror()
 #include <errno.h> // for errno
@@ -38,19 +39,25 @@ extern "C"
 // Androind hal hardware structs
 namespace { // anonymous namespace to prevent pollution
     
+    // Constants
+    static const int ADDRESS_LENGTH = 16;
+    
     // Connection details
     bt_uuid_t s_client_uuid{};
     std::shared_ptr<bt_bdaddr_t> s_bda;
     std::atomic_int s_client_if(-1);
     std::atomic_int s_conn_id(-1);
     
-    std::atomic_bool s_client_registered(false);
-    std::atomic_bool s_found_device(false);
-    std::atomic_bool s_client_connected(false);
+    // State flags
+    std::atomic_bool s_fluoride_on(false);          // Per process (must remain static global)
+    std::atomic_bool s_client_registered(false);    // Per process
+    std::atomic_bool s_found_device(false);         // Per connection (can be rolled into an object)
+    std::atomic_bool s_client_connected(false);     // Per connection
+    std::atomic_bool s_pending_request(false);    // Per connection
 
 
-    // flouride stack state
-    std::atomic_bool s_fluoride_on(false);
+ 
+    
     
     struct hw_device_t *pHWDevice;
     hw_module_t *pHwModule;
@@ -58,19 +65,26 @@ namespace { // anonymous namespace to prevent pollution
     //std::shared_ptr<bluetooth_device_t> pBTDevice;
     //std::shared_ptr<const bt_interface_t> pBluetoothStack;
     std::shared_ptr<const bt_interface_t> pBluetoothStack;
-    std::shared_ptr<btvendor_interface_t> btVendorInterface;
+    //std::shared_ptr<btvendor_interface_t> btVendorInterface;  // Not doing any vendor-base operations...
 
     // GATT
     std::shared_ptr<btgatt_interface_t> pGATTInterface;
-    //std::shared_ptr<const btgatt_server_interface_t> m_pGATTServerInterface;
     std::shared_ptr<const btgatt_client_interface_t> s_GATT_client_interface;
+
+    std::string uuid_stringer(bt_uuid_t* uuid) {
+        std::stringstream ss;
+        for(int i = 15; i >= 0; --i) {
+            ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(uuid->uu[i]);
+        }
+        return ss.str();
+    }
 
 
     // Callback that triggers once client is registered
     void RegisterClientCallback(int status, int client_if, bt_uuid_t *app_uuid) {
         std::cout << "Registered! uuid:0x";
         for( int i = 0; i < 16; i++ ) {
-            std::cout << std::hex << std::setw( 2 ) << std::setfill( '0' ) << static_cast<int>( app_uuid->uu[i] );
+            std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(app_uuid->uu[i]);
         }
         std::cout << " client_if:" << client_if << std::endl << std::flush;
         s_client_if = client_if;
@@ -85,10 +99,10 @@ namespace { // anonymous namespace to prevent pollution
 
         // Search specific stuff
         static const uint8_t ON_SEMI_ID[] {0x62, 0x03, 0x03, '\0'};
-        static const std::string RUBEUS_NAME_HEADER( "RubeusBT" );
+        static const std::string RUBEUS_NAME_HEADER(/*"RubeusBT"*/ "Peripheral_");
 
         bool name_match = false;
-        bool manuf_id_match = false;
+        bool manuf_id_match = /*false*/ true;
 
         static int count = 1;
         bool time_to_stop = false;
@@ -171,7 +185,7 @@ namespace { // anonymous namespace to prevent pollution
     
 
     void ConnectClientCallback(int conn_id, int status, int client_if, bt_bdaddr_t* bda) {
-        std::cout << "WOOOOOO CONNECTEDDDDDDD, client_if:" << client_if << " conn_id: " << conn_id << "uuid:0x";
+        std::cout << "CONNECTED, client_if:" << client_if << " conn_id: " << conn_id << " address:0x";
         for (int i = 0; i < 16; i++) {
             std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(bda->address[i]);
         }
@@ -191,12 +205,46 @@ namespace { // anonymous namespace to prevent pollution
     }
 
 
+    void search_complete_callback(int conn_id, int status) {
+        std::cout << "Service search complete on conn_id " << conn_id << " with status 0x" << std::hex << status << std::endl;
+        s_pending_request = false;
+    }
+
+
+    void get_gatt_db_callback(int conn_id, btgatt_db_element_t* db, int count) {
+        static const std::map<bt_gatt_db_attribute_type_t, std::string> TYPES = {
+            {BTGATT_DB_PRIMARY_SERVICE, "primary service"},
+            {BTGATT_DB_SECONDARY_SERVICE, "secondary service"},
+            {BTGATT_DB_INCLUDED_SERVICE, "included service"},
+            {BTGATT_DB_CHARACTERISTIC, "characteristic"},
+            {BTGATT_DB_DESCRIPTOR, "descriptor"}      
+        };
+        
+        std::cout << "Gatt DB Callback from " << conn_id << ", got " << std::dec << count << " hits:" << std::endl;
+        for (int i=0; i<count; ++i) {
+            std::cout << std::dec << i << " **** ID: 0x" << std::hex << static_cast<int>(db[i].id) << std::endl;
+            std::cout << "\t UUID: 0x" << uuid_stringer(&(db[i].uuid)) << std::endl;
+            std::cout << "\t type: " << TYPES.at(db[i].type) << std::endl;
+            if (db[i].type == BTGATT_DB_PRIMARY_SERVICE || db[i].type == BTGATT_DB_SECONDARY_SERVICE) {
+                std::cout << "\t start_handle: 0x" << std::hex << static_cast<int>(db[i].start_handle) << std::endl;
+                std::cout << "\t end_handle: 0x" << std::hex << static_cast<int>(db[i].end_handle) << std::endl;
+            } else if (db[i].type == BTGATT_DB_CHARACTERISTIC) {
+                std::cout << "\t attribute handle: 0x" << std::hex << static_cast<int>(db[i].attribute_handle) << std::endl;
+                std::cout << "\t properties: 0x" << std::hex << static_cast<int>(db[i].properties) << std::endl;
+            } else { 
+                std::cout << "\t attribute handle: 0x" << std::hex << static_cast<int>(db[i].attribute_handle) << std::endl;
+            }
+        }
+        s_pending_request = false;
+    }
+
+
     btgatt_client_callbacks_t sBTGATTClientCallbacks = {
         RegisterClientCallback,
         ScanResultCallback,
         ConnectClientCallback, // connect_callback
         DisconnectClientCallback, // disconnect_callback
-        NULL, // search_complete_callback
+        search_complete_callback,
         NULL, // register_for_notification_callback
         NULL, // notify_callback
         NULL, // read_characteristic_callback
@@ -221,7 +269,7 @@ namespace { // anonymous namespace to prevent pollution
         NULL, // batchscan_threshold_callback
         NULL, // track_adv_event_callback
         NULL, // scan_parameter_setup_completed_callback
-        NULL, // get_gatt_db_callback
+        get_gatt_db_callback,
         NULL, // services_removed_callback
         NULL, // services_added_callback
     };
@@ -269,7 +317,21 @@ static void AdapterPropertiesCb( bt_status_t status, int num_properties, bt_prop
 
 static void RemoteDevicePropertiesCb( bt_status_t status, bt_bdaddr_t *bd_addr, int num_properties, bt_property_t *properties )
 {
-    std::cout << __func__ << ":" << __LINE__ << std::endl;
+    // std::cout << __func__ << ":" << __LINE__ << std::endl;
+    std::cout << "Remote Properties from addr 0x";
+    for (int i = 0; i < ADDRESS_LENGTH; i++) {
+            std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(bd_addr->address[i]);
+        }
+    std::cout << " : " << std::endl;
+    for (int entry=0; entry<num_properties; ++entry) {
+        std::cout << "\t";
+        uint8_t* property_val = static_cast<uint8_t*>(properties[entry].val);
+        for (int part=0; part<(properties[entry].len); ++part) {
+            std::cout << static_cast<int>(property_val[part]);
+        }
+        std::cout << std::endl;
+    }
+
 }
 
 static void DeviceFoundCb( int num_properties, bt_property_t *properties )
@@ -537,8 +599,20 @@ int BTConnect(int timeout)
     }
     std::cout << "Found device!" << std::endl;
     s_GATT_client_interface->connect(s_client_if, s_bda.get(), true, 0);
-    return 0;
+    std::cout << "Attempting to connect..." << std::endl;
+    while (!s_client_connected);
 
+
+    s_pending_request = true;
+    s_GATT_client_interface->search_service(s_client_if, nullptr);
+    while (s_pending_request);
+
+    std::cout << "Fetching gatt database..." << std::endl;
+    s_pending_request = true;
+    s_GATT_client_interface->get_gatt_db(s_conn_id);
+    while(s_pending_request);
+
+    return 0;
 }
 
 
@@ -558,7 +632,7 @@ int BTShutdown()
         s_client_registered = false;
     }
     
-   //s_GATT_client_interface->unregister_client(s_client_if);
+    s_GATT_client_interface->unregister_client(s_client_if);
     
     if (pGATTInterface) {
         std::cout << "Cleaning up GATT object..." << std::endl;
@@ -649,7 +723,7 @@ void FluorideBluetoothGATTAdapter::Initialize( const BTDefines::SendEventToManag
     p_gattthis = shared_from_this();
     m_pCommandAdapter->Initialize( cb );
 
-    // NEW STUFF
+    // NEW STUFFF
     memset( s_client_uuid.uu, 0xDA, sizeof( s_client_uuid.uu ) );
     //m_s_GATT_client_interface->register_client( &s_client_uuid );
     m_s_GATT_client_interface->scan( true );
