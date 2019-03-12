@@ -21,6 +21,8 @@ extern "C"
 #include <atomic>
 #include <sstream>
 #include <map>
+#include <algorithm> // for equal
+#include <iterator>
 
 #include <string.h> // for strerror()
 #include <errno.h> // for errno
@@ -40,7 +42,7 @@ extern "C"
 namespace { // anonymous namespace to prevent pollution
     
     // Constants
-    static const int ADDRESS_LENGTH = 16;
+    //static const int UUID_BYTES_LEN = 16;
     
     // Connection details
     bt_uuid_t s_client_uuid{};
@@ -70,14 +72,34 @@ namespace { // anonymous namespace to prevent pollution
     // GATT
     std::shared_ptr<btgatt_interface_t> pGATTInterface;
     std::shared_ptr<const btgatt_client_interface_t> s_GATT_client_interface;
+    std::shared_ptr<btgatt_db_element_t> s_gatt_uuid_db;
+    std::atomic_int s_gatt_uuid_count(0);
+    std::string s_read_response; // this should be made thread-safe...
 
-    std::string uuid_stringer(bt_uuid_t* uuid) {
+
+    std::string uuid_stringer(const uint8_t* uuid) {
+        if (!uuid) {
+            std::cerr << __func__ << ": Empty uuid" << std::endl;
+            return std::string("");
+        }
         std::stringstream ss;
-        for(int i = 15; i >= 0; --i) {
-            ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(uuid->uu[i]);
+        for(int i = UUID_BYTES_LEN-1; i >= 0; --i) {
+            ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(uuid[i]);
         }
         return ss.str();
     }
+    
+    
+    std::string uuid_stringer(bt_uuid_t* uuid) {
+        if (!uuid) {
+            std::cerr << __func__ << ": Empty bt_uuid_t" << std::endl;
+            return std::string("");
+        }
+        return uuid_stringer((uuid->uu));
+    }
+
+
+    
 
 
     // Callback that triggers once client is registered
@@ -197,7 +219,7 @@ namespace { // anonymous namespace to prevent pollution
 
     void DisconnectClientCallback(int conn_id, int status, int client_if, bt_bdaddr_t* bda) {
         std::cout << "D_I_S_C_O_N_N_E_C_T_E_D, client_if:" << client_if << " conn_id: " << conn_id << "uuid:0x";
-        for (int i = 0; i < 16; i++) {
+        for (int i = 0; i < UUID_BYTES_LEN; i++) {
             std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(bda->address[i]);
         }
         std::cout << std::endl;
@@ -211,20 +233,27 @@ namespace { // anonymous namespace to prevent pollution
     }
 
 
-    void get_gatt_db_callback(int conn_id, btgatt_db_element_t* db, int count) {
-        static const std::map<bt_gatt_db_attribute_type_t, std::string> TYPES = {
+    static const std::map<bt_gatt_db_attribute_type_t, std::string> GATT_TYPES = {
             {BTGATT_DB_PRIMARY_SERVICE, "primary service"},
             {BTGATT_DB_SECONDARY_SERVICE, "secondary service"},
             {BTGATT_DB_INCLUDED_SERVICE, "included service"},
             {BTGATT_DB_CHARACTERISTIC, "characteristic"},
             {BTGATT_DB_DESCRIPTOR, "descriptor"}      
         };
+
+
+    void get_gatt_db_callback(int conn_id, btgatt_db_element_t* db, int count) {
+        
+
+        // Seems like it might be unreliable...
+        s_gatt_uuid_db.reset(db);
+        s_gatt_uuid_count = count;
         
         std::cout << "Gatt DB Callback from " << conn_id << ", got " << std::dec << count << " hits:" << std::endl;
-        for (int i=0; i<count; ++i) {
+        /*for (int i=0; i<count; ++i) {
             std::cout << std::dec << i << " **** ID: 0x" << std::hex << static_cast<int>(db[i].id) << std::endl;
             std::cout << "\t UUID: 0x" << uuid_stringer(&(db[i].uuid)) << std::endl;
-            std::cout << "\t type: " << TYPES.at(db[i].type) << std::endl;
+            std::cout << "\t type: " << GATT_TYPES.at(db[i].type) << std::endl;
             if (db[i].type == BTGATT_DB_PRIMARY_SERVICE || db[i].type == BTGATT_DB_SECONDARY_SERVICE) {
                 std::cout << "\t start_handle: 0x" << std::hex << static_cast<int>(db[i].start_handle) << std::endl;
                 std::cout << "\t end_handle: 0x" << std::hex << static_cast<int>(db[i].end_handle) << std::endl;
@@ -234,8 +263,67 @@ namespace { // anonymous namespace to prevent pollution
             } else { 
                 std::cout << "\t attribute handle: 0x" << std::hex << static_cast<int>(db[i].attribute_handle) << std::endl;
             }
+        }*/
+        s_pending_request = false;
+    }
+
+
+    /**
+     * Find uuid in the db
+     * @return: non-zero handle on success
+     */
+    uint16_t find_characteristic_handle_from_uuid(const uint8_t uuid[UUID_BYTES_LEN]) {
+        if (!s_gatt_uuid_db || s_gatt_uuid_count<=0) {
+            std::cerr << __func__ << ": GATT client db uninitialized" << std::endl;
+            return 0;
+        }
+        /*if (sizeof(uuid)/sizeof(uuid[0]) != UUID_BYTES_LEN) {
+            std::cerr << __func__ << ": UUID incorrect byte length" << std::endl;
+            return 0;
+        }*/
+        
+        // Search
+        uint16_t return_handle = 0; 
+        for (int entry=0; entry<s_gatt_uuid_count; ++entry) {
+            if (s_gatt_uuid_db.get()[entry].type != BTGATT_DB_CHARACTERISTIC) {
+                continue;
+            }
+            uint8_t* device_uuid = s_gatt_uuid_db.get()[entry].uuid.uu;
+            if (0 == memcmp(uuid, device_uuid, UUID_BYTES_LEN)) {
+                return_handle = s_gatt_uuid_db.get()[entry].attribute_handle;
+                break;
+            }
+        }
+        return return_handle;
+    }
+
+
+    void write_characteristic_cb(int conn_id, int status, uint16_t handle)
+    {
+        std::cout << "Write on conn_id " << conn_id << ", handle " << handle <<
+            " complete with status code " << status << std::endl;
+        s_pending_request = false;
+    }
+
+
+    void read_characteristic_cb(int conn_id, int status, btgatt_read_params_t *p_data)
+    {
+        if (!p_data) {
+            std::cerr << __func__ << ": no data recieved!" << std::endl;
+            s_read_response.clear();
+        } else {
+            std::cout << "Read on conn_id " << conn_id << ", handle " << p_data->handle <<
+                " complete with status code " << status << std::endl;
+            s_read_response = std::string(reinterpret_cast<char*>(p_data->value.value), p_data->value.len);
         }
         s_pending_request = false;
+    }
+    
+
+    void execute_write_cb(int conn_id, int status) 
+    {
+        std::cout << "Write execute on " << conn_id << "competed with status " << status << std::endl;
+        s_pending_request = false; 
     }
 
 
@@ -247,11 +335,11 @@ namespace { // anonymous namespace to prevent pollution
         search_complete_callback,
         NULL, // register_for_notification_callback
         NULL, // notify_callback
-        NULL, // read_characteristic_callback
-        NULL, // write_characteristic_callback
-        NULL, // read_descriptor_callback
+        read_characteristic_cb,
+        write_characteristic_cb,
+        NULL, // read_descriptor_cb,
         NULL, // write_descriptor_callback
-        NULL, // execute_write_callback
+        execute_write_cb,
         NULL, // read_remote_rssi_callback
         NULL, //ListenCallback,
         NULL, // ConfigureMtuCallback, // configure_mtu_callback
@@ -319,7 +407,7 @@ static void RemoteDevicePropertiesCb( bt_status_t status, bt_bdaddr_t *bd_addr, 
 {
     // std::cout << __func__ << ":" << __LINE__ << std::endl;
     std::cout << "Remote Properties from addr 0x";
-    for (int i = 0; i < ADDRESS_LENGTH; i++) {
+    for (int i = 0; i < UUID_BYTES_LEN; i++) {
             std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(bd_addr->address[i]);
         }
     std::cout << " : " << std::endl;
@@ -586,7 +674,9 @@ int BTSetup()
 
 
 // TODO: Timeout doesn't work!
-int BTConnect(int timeout)
+// TODO: Also ignoring exact match for now
+// In fact, ignoring name too! HAHAHAHAHAHAHAHAHAHHAAAAAAA
+int BTConnect(std::string name, bool exact_match, int timeout)
 {
     s_GATT_client_interface->scan(true);
     std::cout << "started scanning..." << std::endl;
@@ -615,6 +705,57 @@ int BTConnect(int timeout)
     return 0;
 }
 
+
+int BLEWriteCharacteristic(const uint8_t uuid[UUID_BYTES_LEN], std::string to_write)
+{
+    std::string uuid_str(uuid_stringer(uuid));
+    std::cout << "searching for uuid " << uuid_str << std::endl;
+    uint16_t handle = find_characteristic_handle_from_uuid(uuid);
+    if (handle == 0) {
+        std::cerr << __func__ << ": Couldn't find handle associated with uuid " << uuid_str << std::endl; 
+        return -1;
+    }
+    std::cout << "Found handle " << handle << " for uuid " << uuid_str << ", writing '" << to_write << "'..." << std::endl;
+
+    int result = s_GATT_client_interface->write_characteristic(s_conn_id, handle, 1, to_write.size(), 0, const_cast<char*>(to_write.c_str()));
+    if (BT_STATUS_SUCCESS != result) {
+        std::cerr << __func__ << ": Write FAILED with code " << result << std::endl;
+        return -1;
+    }
+    s_pending_request = true;
+    std::cout << "Write  done. Waiting for response..." << std::endl;
+    while (s_pending_request);
+
+
+    result = s_GATT_client_interface->execute_write(s_conn_id, 1);
+    if (BT_STATUS_SUCCESS != result) {
+        std::cerr << __func__ << ": Write execute FAILED with code " << result << std::endl;
+        return -1;
+    }
+    s_pending_request = true;
+    std::cout << "Executing write. Waiting for response..." << std::endl;
+    while (s_pending_request);
+
+    return 0;
+}
+
+std::string BLEReadCharacteristic(const uint8_t uuid[16])
+{
+    uint16_t handle = find_characteristic_handle_from_uuid(uuid);
+    if (handle == 0) {
+        std::cerr << __func__ << ": Couldn't find handle associated with uuid" << std::endl; 
+        return std::string();
+    }
+    int result = s_GATT_client_interface->read_characteristic(s_conn_id, handle, 0);
+    if (BT_STATUS_SUCCESS != result) {
+        std::cerr << __func__ << ": Read FAILED with code " << result << std::endl;
+        return std::string();
+    }
+    s_pending_request = true;
+    std::cout << "Read done. Waiting for response..." << std::endl;
+    while (s_pending_request);
+    return s_read_response;
+}
 
 
 
@@ -653,6 +794,11 @@ int BTShutdown()
     
     return 0;
 }
+
+
+
+
+
 
 
 /*

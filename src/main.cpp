@@ -16,6 +16,19 @@
 //#include "bluetooth.h"
 
 
+namespace { // Anonymous namespace
+    const uint8_t CS_SVC_UUID[] = { 
+        0x24, 0xdc, 0x0e, 0x6e, 0x01, 0x40, 0xca, 0x9e,
+        0xe5, 0xa9, 0xa3, 0x00, 0xb5, 0xf3, 0x93, 0xe0 };
+    const uint8_t CS_CHARACTERISTIC_TX_UUID[] = { 
+        0x24, 0xdc, 0x0e, 0x6e, 0x02, 0x40, 0xca, 0x9e, 
+        0xe5, 0xa9, 0xa3, 0x00, 0xb5, 0xf3, 0x93, 0xe0  };
+    const uint8_t CS_CHARACTERISTIC_RX_UUID[] = { 
+        0x24, 0xdc, 0x0e, 0x6e, 0x03, 0x40, 0xca, 0x9e, 
+        0xe5, 0xa9, 0xa3, 0x00, 0xb5, 0xf3, 0x93, 0xe0 };
+}
+
+
 
 // Trying to get some info on how the program exits
 struct surround_main {
@@ -53,16 +66,31 @@ int main(int argc, char **argv)
         exit(1);
     }
 
-    if (0 != BTConnect(5)) {
+    if (0 != BTConnect("Peripheral_")) {
         std::cout << "blergh, no connectie" << std::endl;
         BTShutdown();
         exit(1);
     }
+    //std::cout << "gonna wait for a signal..." << std::endl;
+    //pause(); // Holds until signal recieved
 
-    // Meat of program
-    std::cout << "'sup folks" << std::endl;
-    std::cout << "gonna wait for a signal..." << std::endl;
-    pause(); // Holds until signal recieved
+    if (0 != BLEWriteCharacteristic(CS_CHARACTERISTIC_RX_UUID, "hi_im_eddie")) {
+        std::cerr << "COULDN'T WRITE A GOSH DARN THING" << std::endl;
+        BTShutdown();
+        exit(1);
+    }
+    //std::cout << "gonna wait for a signal..." << std::endl;
+    //pause(); // Holds until signal recieved
+
+    std::string readie = BLEReadCharacteristic(CS_CHARACTERISTIC_RX_UUID);
+    if (readie.empty()) {
+        std::cerr << "I read nuffin :-(" << std::endl;
+    } else {
+        std::cout << "Got response: " << readie << std::endl;
+    }
+
+    //std::cout << "gonna wait for a signal..." << std::endl;
+    //pause(); // Holds until signal recieved
     
     BTShutdown();
     durf("i hope you have...A NICE DAY >:-(");
