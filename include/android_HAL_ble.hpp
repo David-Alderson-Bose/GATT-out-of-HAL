@@ -35,4 +35,10 @@ int BLEWriteCharacteristic(const uint8_t uuid[UUID_BYTES_LEN], std::string to_wr
 std::string BLEReadCharacteristic(const uint8_t uuid[UUID_BYTES_LEN]);
 
 
+/**
+ * TODO: fill this out
+ */
+int BLENotifyRegister(const uint8_t uuid[16]);
+
+
 int BTShutdown();

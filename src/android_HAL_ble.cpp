@@ -56,8 +56,7 @@ namespace { // anonymous namespace to prevent pollution
     std::atomic_bool s_found_device(false);         // Per connection (can be rolled into an object)
     std::atomic_bool s_client_connected(false);     // Per connection
     std::atomic_bool s_pending_request(false);    // Per connection
-
-
+    std::shared_ptr<bt_bdaddr_t> s_conn_addr;                    // Per connection (needs to be thread safe)
  
     
     
@@ -201,6 +200,7 @@ namespace { // anonymous namespace to prevent pollution
             //p_gattthis->Connect( s_client_if, bda );
             s_bda.reset(bda);
             s_found_device = true;
+            //s_conn_addr.reset(bt_bdaddr_t); // TODO: THIS IS SO GRODY. SEPERATE CONNECTION FROM ADDRESS SOMEHOW
         }
         ++count;
     }
@@ -250,7 +250,7 @@ namespace { // anonymous namespace to prevent pollution
         s_gatt_uuid_count = count;
         
         std::cout << "Gatt DB Callback from " << conn_id << ", got " << std::dec << count << " hits:" << std::endl;
-        /*for (int i=0; i<count; ++i) {
+        for (int i=0; i<count; ++i) {
             std::cout << std::dec << i << " **** ID: 0x" << std::hex << static_cast<int>(db[i].id) << std::endl;
             std::cout << "\t UUID: 0x" << uuid_stringer(&(db[i].uuid)) << std::endl;
             std::cout << "\t type: " << GATT_TYPES.at(db[i].type) << std::endl;
@@ -263,7 +263,7 @@ namespace { // anonymous namespace to prevent pollution
             } else { 
                 std::cout << "\t attribute handle: 0x" << std::hex << static_cast<int>(db[i].attribute_handle) << std::endl;
             }
-        }*/
+        }
         s_pending_request = false;
     }
 
@@ -300,7 +300,7 @@ namespace { // anonymous namespace to prevent pollution
 
     void write_characteristic_cb(int conn_id, int status, uint16_t handle)
     {
-        std::cout << "Write on conn_id " << conn_id << ", handle " << handle <<
+        std::cout << "Write on conn_id " << conn_id << ", handle " << std::hex << handle << std::dec << 
             " complete with status code " << status << std::endl;
         s_pending_request = false;
     }
@@ -312,7 +312,7 @@ namespace { // anonymous namespace to prevent pollution
             std::cerr << __func__ << ": no data recieved!" << std::endl;
             s_read_response.clear();
         } else {
-            std::cout << "Read on conn_id " << conn_id << ", handle " << p_data->handle <<
+            std::cout << "Read on conn_id " << conn_id << ", handle 0x" << std::hex << p_data->handle << std::dec << 
                 " complete with status code " << status << std::endl;
             s_read_response = std::string(reinterpret_cast<char*>(p_data->value.value), p_data->value.len);
         }
@@ -327,18 +327,37 @@ namespace { // anonymous namespace to prevent pollution
     }
 
 
+    void register_for_notification_cb(int conn_id, int registered, int status, uint16_t handle)
+    {
+        std::cout << "Conn id " << conn_id << ", handle " << std::hex << handle << std::hex << " notify register code " << registered << std::endl;
+        s_pending_request = false; 
+    }
+
+
+    void notify_cb(int conn_id, btgatt_notify_params_t *p_data)
+    {
+        std::string content(reinterpret_cast<char*>(p_data->value), p_data->len);
+        std::cout << "Got notification from " << conn_id << ": " << content;
+    }
+
+    void write_descriptor_cb(int conn_id, int status, uint16_t handle) 
+    {
+        std::cout << __func__ << std::endl;
+        s_pending_request = false;
+    }
+
     btgatt_client_callbacks_t sBTGATTClientCallbacks = {
         RegisterClientCallback,
         ScanResultCallback,
         ConnectClientCallback, // connect_callback
         DisconnectClientCallback, // disconnect_callback
         search_complete_callback,
-        NULL, // register_for_notification_callback
-        NULL, // notify_callback
+        register_for_notification_cb,
+        notify_cb,
         read_characteristic_cb,
         write_characteristic_cb,
         NULL, // read_descriptor_cb,
-        NULL, // write_descriptor_callback
+        write_descriptor_cb,
         execute_write_cb,
         NULL, // read_remote_rssi_callback
         NULL, //ListenCallback,
@@ -405,7 +424,9 @@ static void AdapterPropertiesCb( bt_status_t status, int num_properties, bt_prop
 
 static void RemoteDevicePropertiesCb( bt_status_t status, bt_bdaddr_t *bd_addr, int num_properties, bt_property_t *properties )
 {
-    // std::cout << __func__ << ":" << __LINE__ << std::endl;
+    return;
+
+    // skip all this for now
     std::cout << "Remote Properties from addr 0x";
     for (int i = 0; i < UUID_BYTES_LEN; i++) {
             std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(bd_addr->address[i]);
@@ -715,7 +736,7 @@ int BLEWriteCharacteristic(const uint8_t uuid[UUID_BYTES_LEN], std::string to_wr
         std::cerr << __func__ << ": Couldn't find handle associated with uuid " << uuid_str << std::endl; 
         return -1;
     }
-    std::cout << "Found handle " << handle << " for uuid " << uuid_str << ", writing '" << to_write << "'..." << std::endl;
+    std::cout << "Found handle 0x" << std::hex << handle << std::dec << " for uuid " << uuid_str << ", writing '" << to_write << "'..." << std::endl;
 
     int result = s_GATT_client_interface->write_characteristic(s_conn_id, handle, 1, to_write.size(), 0, const_cast<char*>(to_write.c_str()));
     if (BT_STATUS_SUCCESS != result) {
@@ -757,6 +778,26 @@ std::string BLEReadCharacteristic(const uint8_t uuid[16])
     return s_read_response;
 }
 
+
+int BLENotifyRegister(const uint8_t uuid[16])
+{
+    uint16_t handle = find_characteristic_handle_from_uuid(uuid);
+    if (handle == 0) {
+        std::cerr << __func__ << ": Couldn't find handle associated with uuid" << std::endl; 
+        return -1;
+    }
+    std::cout << "Attempting to register for notifications on client " << s_client_if << ", handle 0x" << std::hex << handle << std::dec << std::endl;
+    int result = s_GATT_client_interface->register_for_notification(s_client_if, s_bda.get(), 0x11/*handle*/);
+    //int result = s_GATT_client_interface->write_descriptor(s_conn_id, handle+1, 1, 1, 0, "1");
+    if (BT_STATUS_SUCCESS != result) {
+        std::cerr << __func__ << ": Register FAILED with code " << result << std::endl;
+        return -1;
+    }
+    s_pending_request = true;
+    std::cout << "Register for notification submitted. Waiting for response..." << std::endl;
+    while (s_pending_request);
+    return 0;
+}
 
 
 int BTShutdown()

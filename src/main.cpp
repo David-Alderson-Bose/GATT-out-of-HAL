@@ -48,6 +48,15 @@ void signal_handler(int signum)
     sig_caught = 1;
 }
 
+void wait_for_signal(bool wait=true)
+{
+    if (!wait) {
+        return;
+    }
+    std::cout << "gonna wait for a signal..." << std::endl;
+    pause(); // Holds until signal recieved
+}
+
 
 int main(int argc, char **argv)
 {
@@ -71,26 +80,42 @@ int main(int argc, char **argv)
         BTShutdown();
         exit(1);
     }
-    //std::cout << "gonna wait for a signal..." << std::endl;
-    //pause(); // Holds until signal recieved
+    wait_for_signal(false);
 
-    if (0 != BLEWriteCharacteristic(CS_CHARACTERISTIC_RX_UUID, "hi_im_eddie")) {
+
+
+
+    if (0 != BLENotifyRegister(CS_CHARACTERISTIC_TX_UUID)) {
+        std::cerr << "could not register" << std::endl;
+        BTShutdown();
+        exit(1);
+    }
+    sleep(3);
+
+    time_t now = time(nullptr);
+    std::string time_str(ctime(&now));
+    if (0 != BLEWriteCharacteristic(CS_CHARACTERISTIC_RX_UUID, std::string("hi_im_eddie: ")+time_str)) {
         std::cerr << "COULDN'T WRITE A GOSH DARN THING" << std::endl;
         BTShutdown();
         exit(1);
     }
-    //std::cout << "gonna wait for a signal..." << std::endl;
-    //pause(); // Holds until signal recieved
+    //wait_for_signal();
 
-    std::string readie = BLEReadCharacteristic(CS_CHARACTERISTIC_RX_UUID);
+    std::string readie;
+    readie = BLEReadCharacteristic(CS_CHARACTERISTIC_TX_UUID);
     if (readie.empty()) {
         std::cerr << "I read nuffin :-(" << std::endl;
     } else {
         std::cout << "Got response: " << readie << std::endl;
     }
+    readie = BLEReadCharacteristic(CS_CHARACTERISTIC_RX_UUID);
+    if (readie.empty()) {
+        std::cerr << "I read nuffin :-(" << std::endl;
+    } else {
+        std::cout << "Got response: " << readie << std::endl;
+    }
+    wait_for_signal();
 
-    //std::cout << "gonna wait for a signal..." << std::endl;
-    //pause(); // Holds until signal recieved
     
     BTShutdown();
     durf("i hope you have...A NICE DAY >:-(");
