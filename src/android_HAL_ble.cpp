@@ -74,6 +74,7 @@ namespace { // anonymous namespace to prevent pollution
     std::shared_ptr<btgatt_db_element_t> s_gatt_uuid_db;
     std::atomic_int s_gatt_uuid_count(0);
     std::string s_read_response; // this should be made thread-safe...
+    std::string s_connect_name; // this should be made thread-safe...
 
 
     std::string uuid_stringer(const uint8_t* uuid) {
@@ -120,7 +121,7 @@ namespace { // anonymous namespace to prevent pollution
 
         // Search specific stuff
         static const uint8_t ON_SEMI_ID[] {0x62, 0x03, 0x03, '\0'};
-        static const std::string RUBEUS_NAME_HEADER(/*"RubeusBT"*/ "Peripheral_");
+        //static const std::string RUBEUS_NAME_HEADER(/*"RubeusBT"*/ "Peripheral_");
 
         bool name_match = false;
         bool manuf_id_match = /*false*/ true;
@@ -157,7 +158,7 @@ namespace { // anonymous namespace to prevent pollution
             if(type == 0x08 || type == 0x09) {
                 name.assign(reinterpret_cast<char*>(adv_data) + loc + 2, len - 1);
                 ss << " Name: " << name;
-                std::size_t found = name.find(RUBEUS_NAME_HEADER);
+                std::size_t found = name.find(s_connect_name);
                 if (found != std::string::npos) {
                     name_match = true;
                 }
@@ -218,7 +219,7 @@ namespace { // anonymous namespace to prevent pollution
 
 
     void DisconnectClientCallback(int conn_id, int status, int client_if, bt_bdaddr_t* bda) {
-        std::cout << "D_I_S_C_O_N_N_E_C_T_E_D, client_if:" << client_if << " conn_id: " << conn_id << "uuid:0x";
+        std::cout << "D_I_S_C_O_N_N_E_C_T_E_D, client_if:" << client_if << ", conn_id:" << conn_id << ", uuid:0x";
         for (int i = 0; i < UUID_BYTES_LEN; i++) {
             std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(bda->address[i]);
         }
@@ -228,7 +229,7 @@ namespace { // anonymous namespace to prevent pollution
 
 
     void search_complete_callback(int conn_id, int status) {
-        std::cout << "Service search complete on conn_id " << conn_id << " with status 0x" << std::hex << status << std::endl;
+        std::cout << "Service search complete on conn_id " << conn_id << " with status " << std::hex << status << std::endl;
         s_pending_request = false;
     }
 
@@ -249,7 +250,7 @@ namespace { // anonymous namespace to prevent pollution
         s_gatt_uuid_db.reset(db);
         s_gatt_uuid_count = count;
         
-        std::cout << "Gatt DB Callback from " << conn_id << ", got " << std::dec << count << " hits:" << std::endl;
+        std::cout << "Gatt DB Callback from conn_id " << conn_id << ", got " << std::dec << count << " hits:" << std::endl;
         for (int i=0; i<count; ++i) {
             std::cout << std::dec << i << " **** ID: 0x" << std::hex << static_cast<int>(db[i].id) << std::endl;
             std::cout << "\t UUID: 0x" << uuid_stringer(&(db[i].uuid)) << std::endl;
@@ -300,7 +301,7 @@ namespace { // anonymous namespace to prevent pollution
 
     void write_characteristic_cb(int conn_id, int status, uint16_t handle)
     {
-        std::cout << "Write on conn_id " << conn_id << ", handle " << std::hex << handle << std::dec << 
+        std::cout << "Write on conn_id " << conn_id << ", handle 0x" << std::hex << handle << std::dec << 
             " complete with status code " << status << std::endl;
         s_pending_request = false;
     }
@@ -322,27 +323,28 @@ namespace { // anonymous namespace to prevent pollution
 
     void execute_write_cb(int conn_id, int status) 
     {
-        std::cout << "Write execute on " << conn_id << "competed with status " << status << std::endl;
+        std::cout << "Write execute on connection " << conn_id << " competed with status " << status << std::endl;
         s_pending_request = false; 
     }
 
 
     void register_for_notification_cb(int conn_id, int registered, int status, uint16_t handle)
     {
-        std::cout << "Conn id " << conn_id << ", handle " << std::hex << handle << std::hex << " notify register code " << registered << std::endl;
+        std::cout << "Notify register CB - Conn id " << conn_id << ", handle 0x" << std::hex << handle << ", registered? " << registered << ", status " << status << std::endl;
         s_pending_request = false; 
     }
 
 
     void notify_cb(int conn_id, btgatt_notify_params_t *p_data)
     {
+        std::cout << __func__ << ":" << __LINE__ << std::endl;
         std::string content(reinterpret_cast<char*>(p_data->value), p_data->len);
         std::cout << "Got notification from " << conn_id << ": " << content;
     }
 
     void write_descriptor_cb(int conn_id, int status, uint16_t handle) 
     {
-        std::cout << __func__ << std::endl;
+        std::cout << "Write Descriptor CB - Conn id " << conn_id << ", handle 0x" << std::hex << handle << std::hex << "  status " << status << std::endl;
         s_pending_request = false;
     }
 
@@ -360,7 +362,7 @@ namespace { // anonymous namespace to prevent pollution
         write_descriptor_cb,
         execute_write_cb,
         NULL, // read_remote_rssi_callback
-        NULL, //ListenCallback,
+        NULL, // ListenCallback,
         NULL, // ConfigureMtuCallback, // configure_mtu_callback
         NULL, // scan_filter_cfg_callback
         NULL, // scan_filter_param_callback
@@ -699,6 +701,8 @@ int BTSetup()
 // In fact, ignoring name too! HAHAHAHAHAHAHAHAHAHHAAAAAAA
 int BTConnect(std::string name, bool exact_match, int timeout)
 {
+    s_connect_name = name;
+    
     s_GATT_client_interface->scan(true);
     std::cout << "started scanning..." << std::endl;
     time_t start = time(nullptr);
@@ -713,14 +717,14 @@ int BTConnect(std::string name, bool exact_match, int timeout)
     std::cout << "Attempting to connect..." << std::endl;
     while (!s_client_connected);
 
-
+    std::cout << "Searching for services..." << std::endl;
     s_pending_request = true;
-    s_GATT_client_interface->search_service(s_client_if, nullptr);
+    s_GATT_client_interface->search_service(s_client_if, nullptr); // Need to do this before get_gatt_db will work
     while (s_pending_request);
-
+    
     std::cout << "Fetching gatt database..." << std::endl;
     s_pending_request = true;
-    s_GATT_client_interface->get_gatt_db(s_conn_id);
+    s_GATT_client_interface->get_gatt_db(s_conn_id); // Need to do search_services before this will work
     while(s_pending_request);
 
     return 0;
@@ -747,7 +751,8 @@ int BLEWriteCharacteristic(const uint8_t uuid[UUID_BYTES_LEN], std::string to_wr
     std::cout << "Write  done. Waiting for response..." << std::endl;
     while (s_pending_request);
 
-
+    // I had thought that "execute_write" needed to be called after writing, but that doesn't seem to be the case
+    /*
     result = s_GATT_client_interface->execute_write(s_conn_id, 1);
     if (BT_STATUS_SUCCESS != result) {
         std::cerr << __func__ << ": Write execute FAILED with code " << result << std::endl;
@@ -756,6 +761,7 @@ int BLEWriteCharacteristic(const uint8_t uuid[UUID_BYTES_LEN], std::string to_wr
     s_pending_request = true;
     std::cout << "Executing write. Waiting for response..." << std::endl;
     while (s_pending_request);
+    */
 
     return 0;
 }
@@ -787,8 +793,9 @@ int BLENotifyRegister(const uint8_t uuid[16])
         return -1;
     }
     std::cout << "Attempting to register for notifications on client " << s_client_if << ", handle 0x" << std::hex << handle << std::dec << std::endl;
-    int result = s_GATT_client_interface->register_for_notification(s_client_if, s_bda.get(), 0x11/*handle*/);
-    //int result = s_GATT_client_interface->write_descriptor(s_conn_id, handle+1, 1, 1, 0, "1");
+    int result;
+    result = s_GATT_client_interface->register_for_notification(s_client_if, s_bda.get(), /*0x11*/ handle);
+    //result = s_GATT_client_interface->write_descriptor(s_conn_id, handle+1, 1, 1, 0, const_cast<char*>("1"));
     if (BT_STATUS_SUCCESS != result) {
         std::cerr << __func__ << ": Register FAILED with code " << result << std::endl;
         return -1;

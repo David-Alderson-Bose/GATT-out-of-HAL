@@ -48,6 +48,13 @@ void signal_handler(int signum)
     sig_caught = 1;
 }
 
+void abort_handler(int signum) {
+    if (signum != SIGABRT) {
+        std::cerr << "DO NOT USE THIS FOR NON_SIGABRYTEuLIULWIUH~~~~!@!!!" << std::endl;
+    }
+    exit(1);
+}
+
 void wait_for_signal(bool wait=true)
 {
     if (!wait) {
@@ -58,13 +65,81 @@ void wait_for_signal(bool wait=true)
 }
 
 
+
+
+
+void echo_server()
+{
+    if (0 != BTConnect("Peripheral_")) {
+        std::cout << "blergh, no connectie" << std::endl;
+        return;
+    }
+    
+    if (0 != BLENotifyRegister(CS_CHARACTERISTIC_TX_UUID)) {
+        std::cerr << "could not register" << std::endl;
+        return;
+    }
+    //sleep(1);
+    /*
+    time_t now = time(nullptr);
+    std::string time_str(ctime(&now));
+    if (0 != BLEWriteCharacteristic(CS_CHARACTERISTIC_RX_UUID, std::string("hi_im_eddie: ")+time_str)) {
+        std::cerr << "COULDN'T WRITE A GOSH DARN THING" << std::endl;
+        BTShutdown();
+        exit(1);
+    }*/
+    //wait_for_signal();
+
+    while (sig_caught == 0) {
+        sleep(1);
+        time_t now = time(nullptr);
+        std::string time_str(ctime(&now));
+        BLEWriteCharacteristic(CS_CHARACTERISTIC_RX_UUID, std::string("hi_im_eddie: ")+time_str);
+    }
+    /*
+    std::string readie;
+    readie = BLEReadCharacteristic(CS_CHARACTERISTIC_TX_UUID);
+    if (readie.empty()) {
+        std::cerr << "I read nuffin :-(" << std::endl;
+    } else {
+        std::cout << "Got response: " << readie << std::endl;
+    }
+    
+    readie = BLEReadCharacteristic(CS_CHARACTERISTIC_RX_UUID);
+    if (readie.empty()) {
+        std::cerr << "I read nuffin :-(" << std::endl;
+    } else {
+        std::cout << "Got response: " << readie << std::endl;
+    }
+    wait_for_signal();
+    */
+}
+
+
+
+void notify_server()
+{
+    if (0 != BTConnect("RubeusBT")) {
+        std::cout << "blergh, no connectie" << std::endl;
+        return;
+    }
+    
+    if (0 != BLENotifyRegister(CS_CHARACTERISTIC_TX_UUID)) {
+        std::cerr << "could not register" << std::endl;
+        return;
+    }
+
+    pause();
+}
+
+
 int main(int argc, char **argv)
 {
     
     // Set up signal handling
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
-    signal(SIGABRT, signal_handler);
+    //signal(SIGABRT, abort_handler);
 
     // Printing PID makes it easier to send SIGTERM
     std::cout << "Process ID: " << getpid() << std::endl;
@@ -75,48 +150,13 @@ int main(int argc, char **argv)
         exit(1);
     }
 
-    if (0 != BTConnect("Peripheral_")) {
-        std::cout << "blergh, no connectie" << std::endl;
-        BTShutdown();
-        exit(1);
-    }
-    wait_for_signal(false);
 
+#ifdef ECHO
+    echo_server();
+#else
+    notify_server();
+#endif
 
-
-
-    if (0 != BLENotifyRegister(CS_CHARACTERISTIC_TX_UUID)) {
-        std::cerr << "could not register" << std::endl;
-        BTShutdown();
-        exit(1);
-    }
-    sleep(3);
-
-    time_t now = time(nullptr);
-    std::string time_str(ctime(&now));
-    if (0 != BLEWriteCharacteristic(CS_CHARACTERISTIC_RX_UUID, std::string("hi_im_eddie: ")+time_str)) {
-        std::cerr << "COULDN'T WRITE A GOSH DARN THING" << std::endl;
-        BTShutdown();
-        exit(1);
-    }
-    //wait_for_signal();
-
-    std::string readie;
-    readie = BLEReadCharacteristic(CS_CHARACTERISTIC_TX_UUID);
-    if (readie.empty()) {
-        std::cerr << "I read nuffin :-(" << std::endl;
-    } else {
-        std::cout << "Got response: " << readie << std::endl;
-    }
-    readie = BLEReadCharacteristic(CS_CHARACTERISTIC_RX_UUID);
-    if (readie.empty()) {
-        std::cerr << "I read nuffin :-(" << std::endl;
-    } else {
-        std::cout << "Got response: " << readie << std::endl;
-    }
-    wait_for_signal();
-
-    
     BTShutdown();
     durf("i hope you have...A NICE DAY >:-(");
 
