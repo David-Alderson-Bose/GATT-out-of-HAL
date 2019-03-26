@@ -51,7 +51,7 @@ bool RivieraBT::isSetup()
 }
 
 
-GattPtr RivieraBT::GetGatt()
+RivieraBT::GattPtr RivieraBT::GetGatt()
 {
     // TODO: Actual work
     return nullptr;

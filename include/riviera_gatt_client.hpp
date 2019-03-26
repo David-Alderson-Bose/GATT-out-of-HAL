@@ -24,11 +24,14 @@ namespace RivieraGattClient {
      * TODO: needs arguments for what to connect to (presently hardcoded internally)
      */ 
     ConnectionPtr Connect(std::string name, bool exact_match=false, int timeout=-1);
+    
 
 
     // Actual Connection class
+    // class Connection: std::enable_shared_from_this<Connection> {
     class Connection {
     public:
+        //static ConnectionPtr Connect(std::string name, bool exact_match, int timeout);
         friend ConnectionPtr Connect(std::string name, bool exact_match, int timeout);
         
         // TODO: Do I need a destructor??
@@ -39,6 +42,12 @@ namespace RivieraGattClient {
          * @return: true if available, false if busy
          */  
         bool Available();
+
+
+        /**
+         * Set connection to be available
+         */
+        //void SetAvailable();
 
         /**
          * Write to a characteristic of the connected device
@@ -63,14 +72,25 @@ namespace RivieraGattClient {
         int ReadCharacteristic(RivieraBT::UUID uuid, ReadCallback cb);
 
 
+        int GetConnectionID();
+
+
+        std::string GetName();
+
+
 
     protected:
-        Connection(int conn_id, bt_bdaddr_t* bda);
+        Connection(std::string name, int conn_id, bt_bdaddr_t* bda, bool& available_ref, 
+            std::shared_ptr<btgatt_db_element_t>& uuid_db_ref, int& uuid_count_ref);    
+        void fetch_services(void);
 
+    private:
+        std::string m_name;
         int m_conn_id;
         std::shared_ptr<bt_bdaddr_t> m_bda;
-        std::shared_ptr<btgatt_db_element_t> m_gatt_uuid_db;
-        std::atomic_bool m_available;
+        std::atomic_bool& m_available;
+        std::shared_ptr<btgatt_db_element_t>& m_handles_db;
+        int& m_handles_count;
     };
 
 }
