@@ -33,44 +33,27 @@ namespace {
 } 
 
 
-/*
-namespace { // Anonymous namespace for connection manager
-    struct ConnectionManager {
-        std::unordered_map<std::string, RivieraGattClient::ConnectionPtr> connections;
-        void CloseAll() {
-            for (auto& kv: connections) {
-                if (kv.second) { 
-                    // TODO: close connection
-                    delete kv.second;
-                    kv.second = nullptr;
-                }
-            }
-        }
-    }
-}
-*/
+
+struct ConnectionData {
+        std::atomic_bool available;
+        std::shared_ptr<btgatt_db_element_t> handles_db;
+        int handles_count;
+        RivieraGattClient::ConnectionPtr connection;
+        RivieraGattClient::ReadCallback read_cb;
+        std::map<RivieraBT::UUID, int> handles;
+        ConnectionData() : available(false), handles_db(nullptr), handles_count(-1), connection(nullptr), read_cb(nullptr) {}
+    };
 
 // Anonymous namespace for data storage
 namespace {
 
-    struct HandlesDB {
-        
-        
-        HandlesDB() : uuid_db(nullptr),
-    }
+
     
     
-    struct ConnectionData {
-        bool available;
-        std::shared_ptr<btgatt_db_element_t> handles_db;
-        int handles_count;
-        RivieraGattClient::ConnectionPtr connection;
-        ConnectionData() : available(false), handles_db(nullptr), handles_count(-1), connection(nullptr) {}
-    }
+    
 
     // Hold list of connections
-    //std::unordered_map<std::string, RivieraGattClient::ConnectionPtr> s_connections;
-    std::unordered_map<std::string, ConnectionData> s_connections;
+    std::unordered_map<int, ConnectionData> s_connections;
     
 
 
@@ -220,82 +203,50 @@ namespace {
 
     void search_complete_callback(int conn_id, int status) {
         std::cout << "Service search complete on conn_id " << conn_id << " with status " << std::hex << status << std::endl;
-        for (auto& kv: s_connections) {
-            if (kv.second.connection->GetConnectionID() == conn_id) {
-                kv.second.available = true;
-                break;
-            }
+        if (s_connections.count(conn_id) > 0) {
+            s_connections[conn_id].available = true;
         }
     }
-
-
-    
 
 
     void get_gatt_db_callback(int conn_id, btgatt_db_element_t* db, int count) {
-        for (auto& kv: s_connections) {
-            if (conn_id == kv.second.connection->GetConnectionID()) {
-                kv.second.gatt_uuid_db.reset(db);
-                kv.second.gatt_uuid_count = count;
-                kv.second.available = true;
-                break;
-            }
+        if (s_connections.count(conn_id) > 0) {
+            s_connections[conn_id].handles_db.reset(db);
+            s_connections[conn_id].handles_count = count;
+            s_connections[conn_id].available = true;
         }
     }
 
 
-    /**
-     * Find uuid in the db
-     * @return: non-zero handle on success
-     */
-    uint16_t find_characteristic_handle_from_uuid(const uint8_t uuid[UUID_BYTES_LEN]) {
-        /*
-        if (!s_gatt_uuid_db || s_gatt_uuid_count<=0 false) {
-            std::cerr << __func__ << ": GATT client db uninitialized" << std::endl;
-            return 0;
-        }
-        if (sizeof(uuid)/sizeof(uuid[0]) != UUID_BYTES_LEN) {
-            std::cerr << __func__ << ": UUID incorrect byte length" << std::endl;
-            return 0;
-        }
-        
-        // Search
-        uint16_t return_handle = 0; 
-        for (int entry=0; entry<s_gatt_uuid_count; ++entry) {
-            if (s_gatt_uuid_db.get()[entry].type != BTGATT_DB_CHARACTERISTIC) {
-                continue;
-            }
-            uint8_t* device_uuid = s_gatt_uuid_db.get()[entry].uuid.uu;
-            if (0 == memcmp(uuid, device_uuid, UUID_BYTES_LEN)) {
-                return_handle = s_gatt_uuid_db.get()[entry].attribute_handle;
-                break;
-            }
-        }
-        return return_handle;
-        */
-       return 0;
-    }
 
 
     void write_characteristic_cb(int conn_id, int status, uint16_t handle)
     {
         std::cout << "Write on conn_id " << conn_id << ", handle 0x" << std::hex << handle << std::dec << 
             " complete with status code " << status << std::endl;
-        //s_pending_request = false;
+        if (s_connections.count(conn_id) > 0) {
+            s_connections[conn_id].available = true;
+        }
     }
 
 
     void read_characteristic_cb(int conn_id, int status, btgatt_read_params_t *p_data)
     {
+        if (s_connections.count(conn_id) == 0) {
+            return;
+        }
+        
         if (!p_data) {
             std::cerr << __func__ << ": no data recieved!" << std::endl;
-            //s_read_response.clear();
         } else {
             std::cout << "Read on conn_id " << conn_id << ", handle 0x" << std::hex << p_data->handle << std::dec << 
                 " complete with status code " << status << std::endl;
             //s_read_response = std::string(reinterpret_cast<char*>(p_data->value.value), p_data->value.len);
+            if (s_connections[conn_id].read_cb) {
+                s_connections[conn_id].read_cb(p_data->value.value, p_data->value.len);
+            }
         }
-        //s_pending_request = false;
+        s_connections[conn_id].available = true;
     }
 
 
@@ -362,8 +313,8 @@ namespace {
 
 // Anonymous namespace (a cute lil one) for setup of the GATT device
 namespace {
-    btgatt_callbacks_t sBTGATTCallbacks = {
-        sizeof( sBTGATTCallbacks ),
+    btgatt_callbacks_t s_gatt_callbacks = {
+        sizeof( s_gatt_callbacks ),
         &sBTGATTClientCallbacks,
         &sBTGATTServerCallbacks,
     };
@@ -411,21 +362,19 @@ namespace {
 }
 
 
-
 RivieraGattClient::ConnectionPtr RivieraGattClient::Connect(std::string name, bool exact_match, int timeout)
-//RivieraGattClient::ConnectionPtr RivieraGattClient::Connection::Connect(std::string name, bool exact_match, int timeout)
 {
     if (gatt_setup() != 0) {
         return nullptr;
     }
 
     // Do something else if multiples of same name are allowed
-    if (s_connections.count(name) != 0) {
-        std::cerr << "Already registered " << name << std::endl;
+    for (auto& kv: s_connections) {
+        if (kv.second.connection && kv.second.connection->GetName() == name) {
+            std::cerr << "Already registered " << name << std::endl;
+            return nullptr;
+        }
     } 
-
-    // Load name to scan for
-    s_connections[name];
     
     // Wait in case scanning already
     while (s_scanning);
@@ -444,73 +393,98 @@ RivieraGattClient::ConnectionPtr RivieraGattClient::Connect(std::string name, bo
     s_gatt_client_interface->connect(s_client_if, s_bda.get(), true, 0);
     while (s_conn_id < 0);
 
-    Connection* temp = new RivieraGattClient::Connection(s_conn_id, s_bda.get() s_connections[name].available, s_connections[name].handles_count, s_connections[name]);
-    s_connections[name].connection.reset(temp);
-    s_connections[name].available = true;
+    //Connection* temp = new RivieraGattClient::Connection(name, s_conn_id, s_bda.get(), s_connections[name].available, s_connections[name].handles_db, s_connections[name].handles_count);
+    s_connections[s_conn_id]; // create spot
+    Connection* temp = new RivieraGattClient::Connection(name, s_conn_id, s_bda.get(), &(s_connections[s_conn_id]));
+    s_connections[s_conn_id].connection.reset(temp);
+    s_connections[s_conn_id].available = true;
     s_connecting = false;
     clear_connect_data();
-    return s_connections[name].connection;
+    return s_connections[s_conn_id].connection;
 }
 
 
-int Riviera::Connection::GetConnectionID() {
-    return m_conn_id(); 
+int RivieraGattClient::Connection::GetConnectionID() {
+    return m_conn_id; 
+}
+
+
+std::string RivieraGattClient::Connection::GetName() {
+    return m_name;
 }
 
  
-RivieraGattClient::Connection::Connection(std::string name, int conn_id, bt_bdaddr_t* bda, 
-    bool& available_ref, std::shared_ptr<btgatt_db_element_t>& handles_db_ref, int& handles_count_ref) 
-    : m_conn_id(conn_id)
+RivieraGattClient::Connection::Connection(std::string name, int conn_id, bt_bdaddr_t* bda, ConnectionData* data)
+    : m_name(name)
+    , m_conn_id(conn_id)
     , m_bda(bda)
-    , m_available(available_ref)
-    , m_handles_db(uuid_db_ref)
-    , m_handles_count(uuid_count_ref)
-{}
+{
+    m_data.reset(data);
+}
+
+
+void RivieraGattClient::Connection::fill_handle_map() 
+{
+    if (!m_data->handles_db || m_data->handles_count <= 0) {
+        std::cerr << __func__ << ": no handdles found" << std::endl;
+        return;
+    }
+    for (int entry=0; entry<(m_data->handles_count); ++entry) {
+        if (m_data->handles_db.get()[entry].type != BTGATT_DB_CHARACTERISTIC) {
+            continue;
+        }
+        RivieraBT::UUID uuid;
+        auto start = std::begin(m_data->handles_db.get()[entry].uuid.uu);
+        std::copy(start, start+UUID_BYTES_LEN, uuid.begin());
+        m_data->handles[uuid] = m_data->handles_db.get()[entry].attribute_handle;
+    } 
+}
+
 
 
 void RivieraGattClient::Connection::fetch_services(void) 
 {
     std::cout << "Searching for services..." << std::endl;
-    s_available = true;
-    s_GATT_client_interface->search_service(s_client_if, nullptr); // Need to do this before get_gatt_db will work
-    while (!m_available);
+    m_data->available = false;
+    s_gatt_client_interface->search_service(s_client_if, nullptr); // Need to do this before get_gatt_db will work
+    while (!m_data->available);
     
     std::cout << "Fetching gatt database..." << std::endl;
-    s_pending_request = true;
-    s_GATT_client_interface->get_gatt_db(s_conn_id); // Need to do search_services before this will work
-    while(!m_available);
+    m_data->available = false;
+    s_gatt_client_interface->get_gatt_db(s_conn_id); // Need to do search_services before this will work
+    while(!m_data->available);
+
+    fill_handle_map();
 }
 
 
 
-int RivieraGattClient::Connection::WriteCharacteristic(const uint8_t uuid[UUID_BYTES_LEN], std::string to_write)
+int RivieraGattClient::Connection::WriteCharacteristic(RivieraBT::UUID uuid, std::string to_write)
 {
-    if (!m_available) {
-        std::cerr << "Connection busy" << endl;
+    if (m_data->available) {
+        std::cerr << "Connection busy" << std::endl;
         return -1;
     }
     
-    if (!m_gatt_uuid_db) {
-        fetch_database();
+    if (m_data->handles.empty()) {
+        fetch_services();
     }
     
-    std::string uuid_str(uuid_stringer(uuid));
+    std::string uuid_str(RivieraBT::StringifyUUID(uuid));
     std::cout << "searching for uuid " << uuid_str << std::endl;
-    uint16_t handle = find_characteristic_handle_from_uuid(uuid);
-    if (handle == 0) {
-        std::cerr << __func__ << ": Couldn't find handle associated with uuid " << uuid_str << std::endl; 
+    if (m_data->handles.count(uuid) == 0) {
+        std::cerr << __func__ << "UUID not available in connection" << std::endl;
         return -1;
     }
-    std::cout << "Found handle 0x" << std::hex << handle << std::dec << " for uuid " << uuid_str << ", writing '" << to_write << "'..." << std::endl;
+    
 
-    int result = s_GATT_client_interface->write_characteristic(s_conn_id, handle, 1, to_write.size(), 0, const_cast<char*>(to_write.c_str()));
+    int result = s_gatt_client_interface->write_characteristic(s_conn_id, m_data->handles[uuid], 1, to_write.size(), 0, const_cast<char*>(to_write.c_str()));
     if (BT_STATUS_SUCCESS != result) {
         std::cerr << __func__ << ": Write FAILED with code " << result << std::endl;
         return -1;
     }
-    s_pending_request = true;
+    m_data->available = false;
     std::cout << "Write  done. Waiting for response..." << std::endl;
-    while (s_pending_request);
 
     return 0;
 }

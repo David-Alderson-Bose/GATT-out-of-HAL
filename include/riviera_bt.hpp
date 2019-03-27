@@ -15,6 +15,7 @@ extern "C"
 
 
 #include <memory>
+#include <array>
 
 
 #define UUID_BYTES_LEN 16
@@ -23,7 +24,8 @@ extern "C"
 
 namespace RivieraBT {
 
-    using UUID = const uint8_t[UUID_BYTES_LEN];
+    //using UUID = const uint8_t[UUID_BYTES_LEN];
+    using UUID = std::array<uint8_t, UUID_BYTES_LEN>;
     using GattPtr = std::shared_ptr<btgatt_interface_t>; 
     
     /**
@@ -31,6 +33,9 @@ namespace RivieraBT {
      * @return: zero on success, non-zero on failure
      */     
     int Setup();
+
+
+    int Shutdown();
 
 
     /**
@@ -43,7 +48,6 @@ namespace RivieraBT {
      * TODO
      */ 
     GattPtr GetGatt();
-
 
     std::string StringifyUUID(UUID uuid);
     std::string StringifyUUID(bt_uuid_t* uuid);

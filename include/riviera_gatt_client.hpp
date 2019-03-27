@@ -6,8 +6,12 @@
 #include <riviera_bt.hpp>
 
 
+// Forward declaration for an internal-use structure
+// Please pay this no mind!
+class ConnectionData;
+
+
 namespace RivieraGattClient {
-    
     // Forward-declare connection class and give it a handy access alias
     class Connection;
     using ConnectionPtr = std::shared_ptr<Connection>;
@@ -28,7 +32,6 @@ namespace RivieraGattClient {
 
 
     // Actual Connection class
-    // class Connection: std::enable_shared_from_this<Connection> {
     class Connection {
     public:
         //static ConnectionPtr Connect(std::string name, bool exact_match, int timeout);
@@ -45,16 +48,11 @@ namespace RivieraGattClient {
 
 
         /**
-         * Set connection to be available
-         */
-        //void SetAvailable();
-
-        /**
          * Write to a characteristic of the connected device
          * @param uuid: 16-byte uuid of characteristic
          * @return: Non-zero on faulure, zero on success
          */
-        int WriteCharacteristic(const uint8_t uuid[UUID_BYTES_LEN], std::string to_write);
+        int WriteCharacteristic(RivieraBT::UUID, std::string to_write);
         
         /**
          * Read from a characteristic of the connected device. Blocking.
@@ -80,17 +78,17 @@ namespace RivieraGattClient {
 
 
     protected:
-        Connection(std::string name, int conn_id, bt_bdaddr_t* bda, bool& available_ref, 
-            std::shared_ptr<btgatt_db_element_t>& uuid_db_ref, int& uuid_count_ref);    
+        //Connection(std::string name, int conn_id, bt_bdaddr_t* bda, std::atomic_bool& available_ref, 
+        //    std::shared_ptr<btgatt_db_element_t>& uuid_db_ref, int& uuid_count_ref);    
+        Connection(std::string name, int conn_id, bt_bdaddr_t* bda, ConnectionData* data);
         void fetch_services(void);
+        void fill_handle_map(void);
 
     private:
         std::string m_name;
         int m_conn_id;
         std::shared_ptr<bt_bdaddr_t> m_bda;
-        std::atomic_bool& m_available;
-        std::shared_ptr<btgatt_db_element_t>& m_handles_db;
-        int& m_handles_count;
+        std::shared_ptr<ConnectionData> m_data;
     };
 
 }
