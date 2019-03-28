@@ -1,6 +1,6 @@
 #pragma once
 
-
+#include <functional>
 #include <memory>
 
 #include <riviera_bt.hpp>
@@ -17,7 +17,8 @@ namespace RivieraGattClient {
     using ConnectionPtr = std::shared_ptr<Connection>;
 
     // Aliases for callback-types
-    using ReadCallback = void(*)(void* buf, size_t len);
+    using ReadCallback = std::function<void(char*, size_t)>;
+    //using ReadCallback = void(*)(void* buf, size_t len);
     
     /**
      * Connect to bluetooth peripheral
@@ -74,6 +75,7 @@ namespace RivieraGattClient {
 
 
         std::string GetName();
+        void PrintHandles();
 
 
 
