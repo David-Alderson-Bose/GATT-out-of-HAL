@@ -143,6 +143,7 @@ namespace { // Anonymous namespace for helper functions
         for(int i = UUID_BYTES_LEN-1; i >= 0; --i) {
             ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(uuid[i]);
         }
+        return ss.str();
     }
 
     pid_t get_other_pid(std::string procname)

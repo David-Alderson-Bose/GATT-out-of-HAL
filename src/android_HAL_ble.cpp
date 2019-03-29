@@ -585,6 +585,7 @@ namespace {
         std::cout << __func__ <<" NOT IMPLEMENTED YET!" << std::endl;
         raise(SIGABRT);
         // TODO: Start btproperty as a child process, I guess?
+        return 0;
     }
 
 

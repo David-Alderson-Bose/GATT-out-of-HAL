@@ -8,6 +8,9 @@
 #include <string.h>  // for strsignal
 #include <iostream>
 #include <atomic>
+#include <unordered_map>
+#include <ctime>
+#include <sstream>
 
 #include <riviera_bt.hpp>
 #include <riviera_gatt_client.hpp>
@@ -56,6 +59,22 @@ void abort_handler(int signum) {
 
 
 
+void connect_test() {
+
+    std::unordered_map<std::string, RivieraGattClient::ConnectionPtr> connect_map({
+        {"Peripheral_", nullptr},
+        {"Rubeus", nullptr}
+    });
+    for (auto& kv: connect_map) {
+        RivieraGattClient::ConnectionPtr connection = RivieraGattClient::Connect(kv.first);
+        if (connection == nullptr) {
+            std::cerr << __func__ << ": Could not connect to " << kv.first << "!" << std::endl;
+            return;
+        }
+    std::cout << "PAUSED. Send signal (or ctrl+c) to continue" << std::endl;
+    pause();
+    }
+}
 
 
 
@@ -71,21 +90,20 @@ void write_n_readback_loop(std::string name, RivieraBT::UUID uuid)
     std::string recv_str;
     std::atomic_bool read_done(false);
     RivieraGattClient::ReadCallback read_cb = [&] (char* buf, size_t len) {
-        recv_str = std::string(reinterpret_cast<char*>(buf), len); 
-        std::cout << "Recieved: " << recv_str << std::endl;
+        recv_str = std::string(buf, len); 
         read_done = true;
     };
     
-    while (sig_caught == 0) {
-        sleep(1);
-        time_t now = time(nullptr);
-        std::string send_str = std::string("hi_im_eddie: ") + std::string(ctime(&now));
+    while (sig_caught == 0) {     
+        std::time_t unix_now = std::time(0);
+        std::stringstream ss;
+        ss << "hi_im_eddie_" << unix_now;
+        std::string send_str(ss.str());
 
         if (0 != echoer->WriteCharacteristic(uuid, send_str)) {
             std::cerr << "COULDN'T WRITE A GOSH DARN THING" << std::endl;
             continue;
         }
-        std::cout << "Sent '" << send_str << "'" << std::endl;
         read_done = false;
 
         sleep(1);
@@ -93,11 +111,10 @@ void write_n_readback_loop(std::string name, RivieraBT::UUID uuid)
             std::cerr << "I read nuffin :-(" << std::endl;
             continue;
         }
-        if (send_str == recv_str) {
-            std::cout << "They match! ^_^" << std::endl;
-        } else {
-            std::cout << "They don't match T_T" <<std::endl;
-        }
+         
+        while (!read_done); // wait around
+        std:: cout << "xmit results:\n " << "\tSent: " << send_str << "\n\tRead: " << recv_str << 
+            "\n\tDiff: " << send_str.compare(recv_str) << std::endl;
     } 
 }
 
@@ -108,7 +125,7 @@ int main(int argc, char **argv)
 {
     
     // Set up signal handling
-    //signal(SIGINT, signal_handler);
+    signal(SIGINT, signal_handler);
     ///signal(SIGTERM, signal_handler);
 
 
@@ -123,10 +140,14 @@ int main(int argc, char **argv)
     std::cout << "Android HAL BT setup complete" << std::endl;
  
     write_n_readback_loop("Peripheral_", CS_CHARACTERISTIC_RX_UUID);
+    //write_n_readback_loop("Rubeus", CS_CHARACTERISTIC_RX_UUID);
+    //connect_test();
+    
+
 
     RivieraBT::Shutdown();
 
-
+    std::cout << "bye bye!" << std::endl;
     return 0;
 }
 

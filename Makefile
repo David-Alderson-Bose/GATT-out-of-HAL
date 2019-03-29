@@ -9,6 +9,8 @@ OBJS += $(patsubst ./src/%.cpp,./build/%.opp,$(wildcard ./src/*.cpp))
 INCLUDE = -I./include \
 	-I$(CASTLE_INCLUDE)/hardware
 
+COMMON_FLAGS += -Wreturn-type #-Wall -Werror
+
 # Functions to help put "whole archive" modifiers around libraries
 whole_archive = -Wl,--whole-archive,${CASTLE_LIB}/$(1),--no-whole-archive
 all_whole_archives = $(foreach lib,$(1),$(call whole_archive,$(lib)))

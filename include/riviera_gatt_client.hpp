@@ -85,6 +85,7 @@ namespace RivieraGattClient {
         Connection(std::string name, int conn_id, bt_bdaddr_t* bda, ConnectionData* data);
         void fetch_services(void);
         void fill_handle_map(void);
+        uint16_t find_characteristic_handle_from_uuid(RivieraBT::UUID uuid);
 
     private:
         std::string m_name;
