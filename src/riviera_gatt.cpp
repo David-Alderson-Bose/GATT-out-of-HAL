@@ -19,7 +19,7 @@
 #include <riviera_bt.hpp>
 #include <riviera_gatt_client.hpp>
 
-
+#define MIN_MTU 23
 
 // Anonymous namespace for constants
 namespace {
@@ -38,10 +38,11 @@ struct ConnectionData {
         std::atomic_bool available;
         std::shared_ptr<btgatt_db_element_t> handles_db;
         int handles_count;
+        size_t mtu;
         RivieraGattClient::ConnectionPtr connection;
         RivieraGattClient::ReadCallback read_cb;
         std::map<RivieraBT::UUID, int> handles;
-        ConnectionData() : available(false), handles_db(nullptr), handles_count(-1), connection(nullptr), read_cb(nullptr) {}
+        ConnectionData() : available(false), handles_db(nullptr), handles_count(-1), mtu(MIN_MTU), connection(nullptr), read_cb(nullptr) {}
     };
 
 // Anonymous namespace for data storage
@@ -226,8 +227,8 @@ namespace {
             std::cerr << __func__ << ": got bad write callback on unclaimed conn_id " << conn_id;
             return;
         }
-        std::cout << "Write on connection  '" << s_connections[conn_id].connection->GetName() << "', handle 0x" << 
-            std::hex << handle << std::dec << " complete with status code " << status << std::endl;
+        //std::cout << "Write on connection  '" << s_connections[conn_id].connection->GetName() << "', handle 0x" << 
+        //    std::hex << handle << std::dec << " complete with status code " << status << std::endl;
         s_connections[conn_id].available = true;
     }
 
@@ -242,8 +243,8 @@ namespace {
         if (!p_data) {
             std::cerr << __func__ << ": no data recieved!" << std::endl;
         } else {
-            std::cout << "Write on connection  '" << s_connections[conn_id].connection->GetName() << 
-                "' complete with status code " << status << std::endl;
+            //std::cout << "Read on connection  '" << s_connections[conn_id].connection->GetName() << 
+            //    "' complete with status code " << status << std::endl;
             if (s_connections[conn_id].read_cb) {
                 s_connections[conn_id].read_cb(reinterpret_cast<char*>(p_data->value.value), p_data->value.len);
                 s_connections[conn_id].read_cb = nullptr; // clear callback
@@ -252,6 +253,16 @@ namespace {
                     std::string(reinterpret_cast<char*>(p_data->value.value), p_data->value.len) << std::endl;
             }
         }
+        s_connections[conn_id].available = true;
+    }
+
+
+    void configure_mtu_cb(int conn_id, int status, int mtu) {
+        if (s_connections.count(conn_id) == 0 || !s_connections[conn_id].connection) {
+            std::cerr << __func__ << ": got mtu callback on unclaimed conn_id " << conn_id;
+            return;
+        }
+        s_connections[conn_id].mtu = mtu;
         s_connections[conn_id].available = true;
     }
 
@@ -438,6 +449,7 @@ RivieraGattClient::Connection::Connection(std::string name, int conn_id, bt_bdad
     , m_bda(bda)
 {
     m_data.reset(data);
+    fetch_services();
 }
 
 
@@ -470,18 +482,18 @@ void RivieraGattClient::Connection::fill_handle_map()
 
 void RivieraGattClient::Connection::fetch_services(void) 
 {
-    std::cout << "Searching for services..." << std::endl;
+    //std::cout << "Searching for services..." << std::endl;
     m_data->available = false;
     s_gatt_client_interface->search_service(s_client_if, nullptr); // Need to do this before get_gatt_db will work
     while (!m_data->available);
     
-    std::cout << "Fetching gatt database..." << std::endl;
+    //std::cout << "Fetching gatt database..." << std::endl;
     m_data->available = false;
     s_gatt_client_interface->get_gatt_db(s_conn_id); // Need to do search_services before this will work
     while(!m_data->available);
 
-    fill_handle_map();
-    std::cout << "Finished attempt to fill handle map" << std::endl;
+    fill_handle_map(); // THIS DOESN"T HAVE TIME TO FINISH
+    //std::cout << "Finished attempt to fill handle map" << std::endl;
     PrintHandles();
 }
 
@@ -513,11 +525,21 @@ uint16_t RivieraGattClient::Connection::find_characteristic_handle_from_uuid(Riv
 }
 
 
+bool RivieraGattClient::Connection::Available() 
+{
+    return m_data->available;
+}
+
 
 int RivieraGattClient::Connection::WriteCharacteristic(RivieraBT::UUID uuid, std::string to_write)
 {
     if (!m_data->available) {
-        std::cerr << "Connection busy" << std::endl;
+        std::cerr << __func__ << ": connection busy" << std::endl;
+        return -1;
+    }
+
+    if (to_write.length() > m_data->mtu) {
+        std::cerr << __func__ << ": length of message " << to_write.length() << " is greater than max xmit size of " << m_data->mtu << std::endl;
         return -1;
     }
     
@@ -531,7 +553,7 @@ int RivieraGattClient::Connection::WriteCharacteristic(RivieraBT::UUID uuid, std
         return -1;
     }
     
-    uint16_t handle = /*find_characteristic_handle_from_uuid(uuid);*/ m_data->handles[uuid];
+    uint16_t handle = m_data->handles[uuid];
     int result = s_gatt_client_interface->write_characteristic(m_conn_id, handle, 1, to_write.size(), 0, const_cast<char*>(to_write.c_str()));
     if (BT_STATUS_SUCCESS != result) {
         std::cerr << __func__ << ": Write FAILED with code " << result << std::endl;
@@ -547,12 +569,29 @@ int RivieraGattClient::Connection::WriteCharacteristic(RivieraBT::UUID uuid, std
 
 std::string RivieraGattClient::Connection::ReadCharacteristic(RivieraBT::UUID uuid)
 {
-    return std::string();
+    std::string recv_str;
+    std::atomic_bool read_done(false);
+    RivieraGattClient::ReadCallback read_cb = [&] (const char* buf, size_t len) {
+        recv_str = std::string(buf, len);
+        read_done = true; 
+    };
+
+    if (ReadCharacteristic(uuid, read_cb) != 0) {
+        return std::string(); 
+    }
+    while (!read_done); // wait around
+    
+    return recv_str;
 }
 
 
 int RivieraGattClient::Connection::ReadCharacteristic(RivieraBT::UUID uuid, ReadCallback cb)
 {
+    if (!m_data->available) {
+        std::cerr << __func__ << ": connection busy" << std::endl;
+        return -1;
+    }
+    
     if (m_data->handles.count(uuid) == 0 || m_data->handles[uuid] <= 0) {
         std::cerr << __func__ << ": Couldn't find handle associated with uuid" << std::endl; 
         return -1;
@@ -568,3 +607,31 @@ int RivieraGattClient::Connection::ReadCharacteristic(RivieraBT::UUID uuid, Read
     std::cout << "Read done. Waiting for response..." << std::endl;
     return 0;
 }
+
+
+int RivieraGattClient::Connection::SetMaxTransmitSize(size_t xmit_size, RivieraGattClient::StatusCallback cb)
+{
+    if (!m_data->available) {
+        std::cerr << __func__ << ": connection busy" << std::endl;
+        return -1;
+    }
+
+    if (xmit_size < MIN_MTU) {
+        std::cerr << __func__ << ": new xmit size cannot be less than " << MIN_MTU << std::endl;
+        return -1;
+    }
+
+    if (s_gatt_client_interface->configure_mtu(m_conn_id, xmit_size) != BT_STATUS_SUCCESS) {
+        std::cerr << __func__ << ": GATT call to change xmit size failed" << std::endl;
+        return -1;
+    }
+    std::cout << "Requested change of xmit size to " << xmit_size << std::endl;
+    return 0;
+}
+
+
+size_t RivieraGattClient::Connection::GetMaxTransmitSize()
+{
+    return m_data->mtu;
+}
+
