@@ -7,9 +7,12 @@ OBJS += $(patsubst ./src/%.cpp,./build/%.opp,$(wildcard ./src/*.cpp))
 
 # Header locations
 INCLUDE = -I./include \
-	-I$(CASTLE_INCLUDE)/hardware
+	-I$(CASTLE_INCLUDE)/hardware \
+	-I/scratch/components-cache/Release/bose-stable/2.4.1-76+g96380a1/opensource-libwebsockets-qc8017_32/include
+
 
 COMMON_FLAGS += -Wreturn-type #-Wall -Werror
+
 
 # Functions to help put "whole archive" modifiers around libraries
 whole_archive = -Wl,--whole-archive,${CASTLE_LIB}/$(1),--no-whole-archive
@@ -38,7 +41,11 @@ OTHER_LIBS := \
 	-lbluetoothdefault \
 	-laudioutils \
 	-llog \
-	-lcutils
+	-lcutils \
+	-lwebsockets \
+	-L/scratch/components-cache/Release/bose-stable/2.4.1-76+g96380a1/opensource-libwebsockets-qc8017_32/lib
+
+
 
 .PHONY: all clean echo
 all: $(EXE)

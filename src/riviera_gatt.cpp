@@ -242,8 +242,6 @@ namespace {
         if (!p_data) {
             std::cerr << __func__ << ": no data recieved!" << std::endl;
         } else {
-            std::cout << "Write on connection  '" << s_connections[conn_id].connection->GetName() << 
-                "' complete with status code " << status << std::endl;
             if (s_connections[conn_id].read_cb) {
                 s_connections[conn_id].read_cb(reinterpret_cast<char*>(p_data->value.value), p_data->value.len);
                 s_connections[conn_id].read_cb = nullptr; // clear callback
@@ -418,6 +416,8 @@ RivieraGattClient::ConnectionPtr RivieraGattClient::Connect(std::string name, bo
     s_connections[s_conn_id].connection.reset(temp);
     s_connections[s_conn_id].available = true;
     s_connecting = false;
+    s_connections[s_conn_id].connection->fetch_services();
+    //clear_connect_data();
     return s_connections[s_conn_id].connection;
 }
 
@@ -553,10 +553,14 @@ std::string RivieraGattClient::Connection::ReadCharacteristic(RivieraBT::UUID uu
 
 int RivieraGattClient::Connection::ReadCharacteristic(RivieraBT::UUID uuid, ReadCallback cb)
 {
-    if (!m_data->available) {
-        std::cerr << "Connection busy" << std::endl;
-        return -1;
-    }
+    // Removing to see if we can get multiple consecutive reads goin
+    //if (!m_data->available) {
+    //    std::cerr << "Connection busy" << std::endl;
+    //    return -1;
+    //}
+    
+    // TODO: This is a hack, add a timeout or something
+    while (!m_data->available);
     
     if (m_data->handles.empty()) {
        fetch_services();
@@ -574,6 +578,6 @@ int RivieraGattClient::Connection::ReadCharacteristic(RivieraBT::UUID uuid, Read
         return -1;
     }
     m_data->available = false;
-    std::cout << "Read done. Waiting for response..." << std::endl;
+    //std::cout << "Read done. Waiting for response..." << std::endl;
     return 0;
 }
