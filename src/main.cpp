@@ -7,6 +7,7 @@
 #include <signal.h>
 #include <string.h>  // for strsignal
 #include <iostream>
+#include <iomanip>
 #include <atomic>
 #include <unordered_map>
 #include <ctime>
@@ -18,116 +19,74 @@
 
 
 
-namespace { // Anonymous namespace
-    const RivieraBT::UUID CS_SVC_UUID = { 
-        0x24, 0xdc, 0x0e, 0x6e, 0x01, 0x40, 0xca, 0x9e,
-        0xe5, 0xa9, 0xa3, 0x00, 0xb5, 0xf3, 0x93, 0xe0 };
-    const RivieraBT::UUID CS_CHARACTERISTIC_TX_UUID = { 
-        0x24, 0xdc, 0x0e, 0x6e, 0x02, 0x40, 0xca, 0x9e, 
-        0xe5, 0xa9, 0xa3, 0x00, 0xb5, 0xf3, 0x93, 0xe0  };
-    const RivieraBT::UUID CS_CHARACTERISTIC_RX_UUID = { 
-        0x24, 0xdc, 0x0e, 0x6e, 0x03, 0x40, 0xca, 0x9e, 
-        0xe5, 0xa9, 0xa3, 0x00, 0xb5, 0xf3, 0x93, 0xe0 };
+namespace { // Anonymous namespace for connection properties
+
+    // Left bud name
+    const std::string LEFT_BUD("Rubeus_accel_demo_L");
+
+    // Bud accelerometer X-axis
+    const RivieraBT::UUID X_AXIS = {
+        0xbe, 0x0c, 0x31, 0x50, 0xc9, 0xc2, 0xae, 0x9f, 
+        0x44, 0x41, 0x87, 0x06, 0x6e, 0x91, 0x11, 0x89 
+    };
 }
 
 
 
-// Trying to get some info on how the program exits
-struct surround_main {
-    surround_main() {std::cout << __func__ << ":Pre-main()!" << std::endl;}
-    ~surround_main() {std::cout << __func__ << ":Post-main()!" << std::endl;}
-};
-static surround_main surroundie;
-
-
-
 static volatile sig_atomic_t sig_caught = 0;
-
-
 void signal_handler(int signum)
 {
     std::cout << "Got signal: " << strsignal(signum) << std::endl;
     sig_caught = 1;
 }
 
-void abort_handler(int signum) {
-    if (signum != SIGABRT) {
-        std::cerr << "DO NOT USE THIS FOR NON_SIGABRYTEuLIULWIUH~~~~!@!!!" << std::endl;
-    }
-    exit(1);
-}
 
 
 
-void connect_test() {
-
-    std::unordered_map<std::string, RivieraGattClient::ConnectionPtr> connect_map({
-        {"Peripheral_", nullptr},
-        {"Rubeus", nullptr}
-    });
-    for (auto& kv: connect_map) {
-        RivieraGattClient::ConnectionPtr connection = RivieraGattClient::Connect(kv.first);
-        if (connection == nullptr) {
-            std::cerr << __func__ << ": Could not connect to " << kv.first << "!" << std::endl;
-            return;
-        }
-    std::cout << "PAUSED. Send signal (or ctrl+c) to continue" << std::endl;
-    pause();
-    }
-}
 
 
 
-void write_n_readback_loop(std::string name, RivieraBT::UUID uuid) 
+void read_loop(std::string name, RivieraBT::UUID uuid) 
 {
-    RivieraGattClient::ConnectionPtr echoer = RivieraGattClient::Connect(name);
-    if (echoer == nullptr) {
+    RivieraGattClient::ConnectionPtr read_only = RivieraGattClient::Connect(name);
+    if (read_only == nullptr) {
         std::cerr << __func__ << ": Could not connect to " << name << "!" << std::endl;
         return;
     }
-    std::cout << "Beginning write/read loop..." << std::endl;
+    std::cout << "Beginning read loop..." << std::endl;
 
     std::string recv_str;
     std::atomic_bool read_done(false);
     RivieraGattClient::ReadCallback read_cb = [&] (char* buf, size_t len) {
-        recv_str = std::string(buf, len); 
+        std::ostringstream oss;
+        for (int i=len-1; i>=0; --i) {
+            oss << std::uppercase << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(buf[i]);
+        }
+        recv_str = oss.str(); 
         read_done = true;
     };
     
-    while (sig_caught == 0) {     
-        std::time_t unix_now = std::time(0);
-        std::stringstream ss;
-        ss << "hi_im_eddie_" << unix_now;
-        std::string send_str(ss.str());
-
-        if (0 != echoer->WriteCharacteristic(uuid, send_str)) {
-            std::cerr << "COULDN'T WRITE A GOSH DARN THING" << std::endl;
-            continue;
-        }
-        read_done = false;
-
+    int count(0);
+    while (sig_caught == 0) {        
         sleep(1);
-        if (0 != echoer->ReadCharacteristic(uuid, read_cb)) {
-            std::cerr << "I read nuffin :-(" << std::endl;
+        std::cout << "Round " << count++ << ": ";
+        read_done = false;
+        if (0 != read_only->ReadCharacteristic(uuid, read_cb)) {
+            std::cout << "I read nuffin :-(" << std::endl;
             continue;
         }
          
         while (!read_done); // wait around
-        std:: cout << "xmit results:\n " << "\tSent: " << send_str << "\n\tRead: " << recv_str << 
-            "\n\tDiff: " << send_str.compare(recv_str) << std::endl;
+        std:: cout << "got string '" << recv_str << "'" << std::endl;
     } 
 }
 
 
 
-
 int main(int argc, char **argv)
 {
-    
     // Set up signal handling
     signal(SIGINT, signal_handler);
-    ///signal(SIGTERM, signal_handler);
-
 
     // Printing PID makes it easier to send SIGTERM
     std::cout << "Process ID: " << getpid() << std::endl;
@@ -139,14 +98,10 @@ int main(int argc, char **argv)
     }
     std::cout << "Android HAL BT setup complete" << std::endl;
  
-    write_n_readback_loop("Peripheral_", CS_CHARACTERISTIC_RX_UUID);
-    //write_n_readback_loop("Rubeus", CS_CHARACTERISTIC_RX_UUID);
-    //connect_test();
-    
+    read_loop(LEFT_BUD, X_AXIS);
 
 
     RivieraBT::Shutdown();
-
     std::cout << "bye bye!" << std::endl;
     return 0;
 }

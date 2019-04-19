@@ -531,7 +531,7 @@ int RivieraGattClient::Connection::WriteCharacteristic(RivieraBT::UUID uuid, std
         return -1;
     }
     
-    uint16_t handle = /*find_characteristic_handle_from_uuid(uuid);*/ m_data->handles[uuid];
+    uint16_t handle = m_data->handles[uuid];
     int result = s_gatt_client_interface->write_characteristic(m_conn_id, handle, 1, to_write.size(), 0, const_cast<char*>(to_write.c_str()));
     if (BT_STATUS_SUCCESS != result) {
         std::cerr << __func__ << ": Write FAILED with code " << result << std::endl;
@@ -553,6 +553,15 @@ std::string RivieraGattClient::Connection::ReadCharacteristic(RivieraBT::UUID uu
 
 int RivieraGattClient::Connection::ReadCharacteristic(RivieraBT::UUID uuid, ReadCallback cb)
 {
+    if (!m_data->available) {
+        std::cerr << "Connection busy" << std::endl;
+        return -1;
+    }
+    
+    if (m_data->handles.empty()) {
+       fetch_services();
+    }
+    
     if (m_data->handles.count(uuid) == 0 || m_data->handles[uuid] <= 0) {
         std::cerr << __func__ << ": Couldn't find handle associated with uuid" << std::endl; 
         return -1;
