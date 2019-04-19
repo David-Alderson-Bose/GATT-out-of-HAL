@@ -75,7 +75,7 @@
             }
         
             ws.onopen = function() {
-               periodicReq = setInterval(reqFromServer, 1000);
+               periodicReq = setInterval(reqFromServer, 250);
                clearTimeout(reconnect);
                console.log("opened");
             };

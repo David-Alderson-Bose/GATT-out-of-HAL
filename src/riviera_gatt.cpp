@@ -203,9 +203,13 @@ namespace {
 
     void search_complete_callback(int conn_id, int status) {
         std::cout << "Service search complete on conn_id " << conn_id << " with status " << std::hex << status << std::endl;
-        if (s_connections.count(conn_id) > 0) {
-            s_connections[conn_id].available = true;
-        }
+        s_scanning = false;
+        //if (s_connections.count(conn_id) > 0) {
+        //    s_connections[conn_id].available = true;
+        //    std::cerr << __func__ << ": found services!" << std::endl;
+        //} else {
+        //    std::cerr << __func__ << ": OH WHAT THE CRAP" << std::endl;
+       // }
     }
 
 
@@ -416,6 +420,9 @@ RivieraGattClient::ConnectionPtr RivieraGattClient::Connect(std::string name, bo
     s_connections[s_conn_id].connection.reset(temp);
     s_connections[s_conn_id].available = true;
     s_connecting = false;
+    s_scanning = true;
+    s_gatt_client_interface->search_service(s_client_if, nullptr); // Need to do this before get_gatt_db will work
+    while(s_scanning);
     s_connections[s_conn_id].connection->fetch_services();
     //clear_connect_data();
     return s_connections[s_conn_id].connection;
@@ -438,6 +445,7 @@ RivieraGattClient::Connection::Connection(std::string name, int conn_id, bt_bdad
     , m_bda(bda)
 {
     m_data.reset(data);
+    std::cout << "Created connection " << m_name << " with conn_id " << std::dec << m_conn_id << std::endl;
 }
 
 
@@ -470,15 +478,19 @@ void RivieraGattClient::Connection::fill_handle_map()
 
 void RivieraGattClient::Connection::fetch_services(void) 
 {
-    std::cout << "Searching for services..." << std::endl;
-    m_data->available = false;
-    s_gatt_client_interface->search_service(s_client_if, nullptr); // Need to do this before get_gatt_db will work
-    while (!m_data->available);
+    std::cout << "Searching for services on " << m_name << " conn_id " << std::dec << m_conn_id << std::endl;
+    //m_data->available = false;
+    //s_gatt_client_interface->search_service(s_client_if, nullptr); // Need to do this before get_gatt_db will work
+    //std::cout << std::dec << __FILE__ << "/" <<  __func__ << __LINE__ << " TRACKING!!!" << std::endl;
+    //while (!m_data->available);
+    //std::cout << std::dec << __FILE__ << "/" <<  __func__ << __LINE__ << " TRACKING!!!" << std::endl;
     
     std::cout << "Fetching gatt database..." << std::endl;
     m_data->available = false;
     s_gatt_client_interface->get_gatt_db(s_conn_id); // Need to do search_services before this will work
+    std::cout << std::dec << __FILE__ << "/" <<  __func__ << __LINE__ << " TRACKING!!!" << std::endl;
     while(!m_data->available);
+    std::cout << std::dec << __FILE__ << "/" <<  __func__ << __LINE__ << " TRACKING!!!" << std::endl;
 
     fill_handle_map();
     std::cout << "Finished attempt to fill handle map" << std::endl;

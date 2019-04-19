@@ -67,10 +67,6 @@ static int g_accel_readings[ACCEL_READINGS_SIZE] = {0};
 std::mutex g_readings_mutex; // This is gonna be callback'd a lot of places, so...
 void update_accel_readings(size_t loc, char* buf, size_t len, std::string name=std::string(""))
 {
-    //if (name.length() > 0) {
-    //    std::cout << "Writing '" << name << "' to loc " << loc << std::endl;
-   // }
-    
     if (loc%2 != 0) {
         std::cerr << __func__ << ": Only even addresses allowed!" << std::endl;
         return;
@@ -144,24 +140,22 @@ int main(int argc, char **argv)
     std::cout << "Android HAL BT setup complete" << std::endl;
 
     // Connect to left bud
-    /*
     RivieraGattClient::ConnectionPtr left_bud = RivieraGattClient::Connect(LEFT_BUD);
     if (left_bud == nullptr) {
         std::cerr << __func__ << ": Could not connect to " << LEFT_BUD << "!" << std::endl;
         RivieraBT::Shutdown();
         return -1;
     }
-    */
-
-    // Connect to Right bud
+    sleep(5); // argh so busted
     
+    // Connect to Right bud
     RivieraGattClient::ConnectionPtr right_bud = RivieraGattClient::Connect(RIGHT_BUD);
     if (right_bud == nullptr) {
         std::cerr << __func__ << ": Could not connect to " << RIGHT_BUD << "!" << std::endl;
         RivieraBT::Shutdown();
         return -2;
     }
-    
+    sleep(5); // argh so busted
 
    // Set up signal handling before main loop starts
     signal(SIGINT, signal_handler);
@@ -171,11 +165,10 @@ int main(int argc, char **argv)
     std::cout << "Beginning read loop..." << std::endl;
     while (sig_caught == 0) {
         // Left accel data
-        /*
         read_accel_data(left_bud, BUD_X_AXIS, 0);
         read_accel_data(left_bud, BUD_Y_AXIS, 2);
         read_accel_data(left_bud, BUD_Z_AXIS, 4);
-        */
+        
 
         // Right accel data
         read_accel_data(right_bud, BUD_X_AXIS, 6);
