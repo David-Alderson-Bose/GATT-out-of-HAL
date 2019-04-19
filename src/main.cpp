@@ -75,7 +75,7 @@ void update_accel_readings(size_t loc, char* buf, size_t len, std::string name=s
         std::cerr << __func__ << ": Only even addresses allowed!" << std::endl;
         return;
     } 
-    if (loc+len >= ACCEL_READINGS_SIZE) {
+    if (loc+len > ACCEL_READINGS_SIZE) {
         std::cerr << __func__ << ": Data too long for address!" << std::endl;
         return;
     }
@@ -144,22 +144,24 @@ int main(int argc, char **argv)
     std::cout << "Android HAL BT setup complete" << std::endl;
 
     // Connect to left bud
+    /*
     RivieraGattClient::ConnectionPtr left_bud = RivieraGattClient::Connect(LEFT_BUD);
     if (left_bud == nullptr) {
         std::cerr << __func__ << ": Could not connect to " << LEFT_BUD << "!" << std::endl;
         RivieraBT::Shutdown();
         return -1;
     }
+    */
 
     // Connect to Right bud
-    /*
+    
     RivieraGattClient::ConnectionPtr right_bud = RivieraGattClient::Connect(RIGHT_BUD);
     if (right_bud == nullptr) {
         std::cerr << __func__ << ": Could not connect to " << RIGHT_BUD << "!" << std::endl;
         RivieraBT::Shutdown();
         return -2;
     }
-    */
+    
 
    // Set up signal handling before main loop starts
     signal(SIGINT, signal_handler);
@@ -169,17 +171,18 @@ int main(int argc, char **argv)
     std::cout << "Beginning read loop..." << std::endl;
     while (sig_caught == 0) {
         // Left accel data
+        /*
         read_accel_data(left_bud, BUD_X_AXIS, 0);
         read_accel_data(left_bud, BUD_Y_AXIS, 2);
         read_accel_data(left_bud, BUD_Z_AXIS, 4);
-        
+        */
+
         // Right accel data
-        //read_accel_data(right_bud, BUD_X_AXIS, 6);
-        //read_accel_data(right_bud, BUD_Y_AXIS, 8);
-        //read_accel_data(right_bud, BUD_Z_AXIS, 10);
+        read_accel_data(right_bud, BUD_X_AXIS, 6);
+        read_accel_data(right_bud, BUD_Y_AXIS, 8);
+        read_accel_data(right_bud, BUD_Z_AXIS, 10);
     
         // WEBSOCKIT TO ME
-        // TODO: not really
         std::cout << "Round " << ++count << ": sending accel data " << format_accel_readings() << std::endl;
         respondo.Respond(1000);
         //sleep(1);

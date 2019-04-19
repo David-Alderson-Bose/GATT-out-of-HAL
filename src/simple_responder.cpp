@@ -28,11 +28,11 @@ namespace {
             memcpy(reinterpret_cast<char*>(buf), to_send.c_str(), to_send.size());
             m = lws_write(wsi, buf, to_send.size(), LWS_WRITE_TEXT);
             if (m < to_send.size()) {
-    			std::cerr << "AH NUTS it BROOOOKE " << std::endl;
+    			std::cerr << __FILE__ << "/" << __func__ << "AH NUTS it BROOOOKE " << std::endl;
                 std::cout << m << " vs " << to_send.size() << std::endl;
     		}
         } else {
-            std::cerr << __LINE__ << ": I dunno what happened! code " << reason << std::endl;
+            std::cout << __FILE__ << "/" << __func__ << ": unhandled websocket callback code " << reason << std::endl;
         }
         return 0;
     }
