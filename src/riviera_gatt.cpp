@@ -204,12 +204,6 @@ namespace {
     void search_complete_callback(int conn_id, int status) {
         std::cout << "Service search complete on conn_id " << conn_id << " with status " << std::hex << status << std::endl;
         s_scanning = false;
-        //if (s_connections.count(conn_id) > 0) {
-        //    s_connections[conn_id].available = true;
-        //    std::cerr << __func__ << ": found services!" << std::endl;
-        //} else {
-        //    std::cerr << __func__ << ": OH WHAT THE CRAP" << std::endl;
-       // }
     }
 
 
