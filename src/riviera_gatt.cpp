@@ -30,8 +30,9 @@ namespace {
         {BTGATT_DB_CHARACTERISTIC, "characteristic"},
         {BTGATT_DB_DESCRIPTOR, "descriptor"}      
     };
-} 
 
+    const unsigned int DEFAULT_MTU = 23; // Industry standards
+} 
 
 
 struct ConnectionData {
@@ -41,22 +42,16 @@ struct ConnectionData {
         RivieraGattClient::ConnectionPtr connection;
         RivieraGattClient::ReadCallback read_cb;
         std::map<RivieraBT::UUID, int> handles;
-        ConnectionData() : available(false), handles_db(nullptr), handles_count(-1), connection(nullptr), read_cb(nullptr) {}
+        unsigned int mtu;
+        ConnectionData() : available(false), handles_db(nullptr), handles_count(-1), 
+                           connection(nullptr), read_cb(nullptr), mtu(DEFAULT_MTU) {}
     };
 
 // Anonymous namespace for data storage
 namespace {
 
-
-    
-    
-    
-
     // Hold list of connections
     std::unordered_map<int, ConnectionData> s_connections;
-    
-
-
 
     // Gatt client interface and tracking
     std::shared_ptr<const btgatt_client_interface_t> s_gatt_client_interface;
@@ -252,6 +247,19 @@ namespace {
     }
 
 
+    void configure_mtu_callback(int conn_id, int status, int mtu)
+    {
+        if (s_connections.count(conn_id) == 0 || !s_connections[conn_id].connection) {
+            std::cerr << __func__ << ": got bad mtu callback on unclaimed conn_id " << conn_id;
+            return;
+        }
+        //s_connections[conn_id].mtu = mtu; // TODO: add back in once status code is observed to work as expected
+        std::cout << __func__ << ": MTU for connection ID " << conn_id << " negotiated to " << mtu << 
+            " with status code " << status << std::endl;
+        s_connections[conn_id].available = true;
+    }
+
+
     btgatt_client_callbacks_t sBTGATTClientCallbacks = {
         RegisterClientCallback,
         ScanResultCallback,
@@ -267,7 +275,7 @@ namespace {
         NULL, // execute_write_cb,
         NULL, // read_remote_rssi_callback
         NULL, // ListenCallback,
-        NULL, // ConfigureMtuCallback, // configure_mtu_callback
+        configure_mtu_callback,
         NULL, // scan_filter_cfg_callback
         NULL, // scan_filter_param_callback
         NULL, // scan_filter_status_callback
@@ -287,7 +295,6 @@ namespace {
         NULL, // services_added_callback
     };
 }
-
 
 
 // Anonymous namespace for gatt server stuff
@@ -586,4 +593,29 @@ int RivieraGattClient::Connection::ReadCharacteristic(RivieraBT::UUID uuid, Read
     m_data->available = false;
     //std::cout << "Read done. Waiting for response..." << std::endl;
     return 0;
+}
+
+
+int RivieraGattClient::Connection::SetMTU(unsigned int new_mtu)
+{
+    // TODO: Add back in once status code in once status code in 
+    //  configure_mtu_callback is observed to work as expected
+    /*
+    if (new_mtu == m_data->mtu) {
+        // No need to set MTU to the same value
+        return 0;
+    }
+    */
+    int result = s_gatt_client_interface->configure_mtu(m_conn_id, static_cast<int>(new_mtu));
+    if (BT_STATUS_SUCCESS != result) {
+        std::cerr << __func__ << ": SetMTU FAILED with code " << result << std::endl;
+        return -1;
+    }
+    m_data->available = false;
+    return 0;
+}
+
+
+unsigned int RivieraGattClient::Connection::GetMTU() {
+    return m_data->mtu;
 }

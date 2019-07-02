@@ -18,7 +18,6 @@ namespace RivieraGattClient {
 
     // Aliases for callback-types
     using ReadCallback = std::function<void(char*, size_t)>;
-    //using ReadCallback = void(*)(void* buf, size_t len);
     
     /**
      * Connect to bluetooth peripheral
@@ -30,12 +29,9 @@ namespace RivieraGattClient {
      */ 
     ConnectionPtr Connect(std::string name, bool exact_match=false, int timeout=-1);
     
-
-
     // Actual Connection class
     class Connection {
     public:
-        //static ConnectionPtr Connect(std::string name, bool exact_match, int timeout);
         friend ConnectionPtr Connect(std::string name, bool exact_match, int timeout);
         
         // TODO: Do I need a destructor??
@@ -46,7 +42,6 @@ namespace RivieraGattClient {
          * @return: true if available, false if busy
          */  
         bool Available();
-
 
         /**
          * Write to a characteristic of the connected device
@@ -70,18 +65,35 @@ namespace RivieraGattClient {
          */
         int ReadCharacteristic(RivieraBT::UUID uuid, ReadCallback cb);
 
-
+        /**
+         * TODO
+         */ 
         int GetConnectionID();
 
+        /**
+         * Set maximum transmission unit (MTU)
+         * @param new_mtu: New MTU to set on the connection
+         * @return: zero on success, non-zero on failure 
+         */
+        int SetMTU(unsigned int new_mtu); 
 
+        /**
+         * Get maximum transmission unit (MTU)
+         * @return: MTU for the connection
+         */
+        unsigned int GetMTU();
+
+        /**
+         * TODO
+         */ 
         std::string GetName();
+        
+        /**
+         * TODO
+         */ 
         void PrintHandles();
 
-
-
     protected:
-        //Connection(std::string name, int conn_id, bt_bdaddr_t* bda, std::atomic_bool& available_ref, 
-        //    std::shared_ptr<btgatt_db_element_t>& uuid_db_ref, int& uuid_count_ref);    
         Connection(std::string name, int conn_id, bt_bdaddr_t* bda, ConnectionData* data);
         void fetch_services(void);
         void fill_handle_map(void);
