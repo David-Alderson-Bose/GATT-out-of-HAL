@@ -8,8 +8,6 @@ OBJS += $(patsubst ./src/%.cpp,./build/%.opp,$(wildcard ./src/*.cpp))
 # Header locations
 INCLUDE = -I./include \
 	-I$(CASTLE_INCLUDE)/hardware \
-	-I/scratch/components-cache/Release/bose-stable/2.4.1-76+g96380a1/opensource-libwebsockets-qc8017_32/include
-
 
 COMMON_FLAGS += -Wreturn-type #-Wall -Werror
 
@@ -42,9 +40,6 @@ OTHER_LIBS := \
 	-laudioutils \
 	-llog \
 	-lcutils \
-	-lwebsockets \
-	-L/scratch/components-cache/Release/bose-stable/2.4.1-76+g96380a1/opensource-libwebsockets-qc8017_32/lib
-
 
 
 .PHONY: all clean echo

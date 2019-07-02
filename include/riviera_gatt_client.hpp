@@ -83,6 +83,15 @@ namespace RivieraGattClient {
          */
         unsigned int GetMTU();
 
+
+        /** 
+         * [de]Register for notifications
+         * @param uuid: UUID for [de]registration
+         * @return: zero on success, non-zero on failure 
+         */
+        int RegisterNotification(RivieraBT::UUID uuid);
+        int DeregisterNotification(RivieraBT::UUID uuid);
+          
         /**
          * TODO
          */ 

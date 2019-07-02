@@ -22,9 +22,6 @@
 // MY headers
 #include <riviera_bt.hpp>
 #include <riviera_gatt_client.hpp>
-#include <simple_responder.hpp>
-
-
 
 
 namespace { // Anonymous namespace for connection properties
@@ -125,12 +122,6 @@ int main(int argc, char **argv)
 {
     // Printing PID makes it easier to send SIGTERM
     std::cout << "Process ID: " << getpid() << std::endl;
-
-    SimpleResponder respondo(9998, &format_accel_readings);
-    if (!respondo.IsReady()) {
-        std::cerr << "could not create websocket!!" << std::endl;
-        return -1111;
-    }
     
     // What's this?? A BLUETOOTH CALLLLL?????? :-O
     if (0 != RivieraBT::Setup()) {
@@ -177,8 +168,8 @@ int main(int argc, char **argv)
     
         // WEBSOCKIT TO ME
         std::cout << "Round " << ++count << ": sending accel data " << format_accel_readings() << std::endl;
-        respondo.Respond(1000);
-        //sleep(1);
+        //respondo.Respond(1000);
+        sleep(1);
     }
 
 

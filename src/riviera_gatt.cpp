@@ -259,6 +259,23 @@ namespace {
         s_connections[conn_id].available = true;
     }
 
+    
+    void register_for_notification_cb(int conn_id, int registered, int status, uint16_t handle)
+    {
+        // TODO: Read the data & do something with it
+        std::cout << __func__ << ": NOTIFICATION RESULT " << registered << " ON CONN ID " << conn_id << std::endl;
+        s_connections[conn_id].available = true;
+    }
+
+
+    void notify_cb(int conn_id, btgatt_notify_params_t *p_data)
+    {
+        // TODO: Read the data & do something with it
+        std::cout << __func__ << ": DO SOMETHING WITH THE NOTIFICATION ON CONN ID " << conn_id << std::endl;
+    }
+
+
+
 
     btgatt_client_callbacks_t sBTGATTClientCallbacks = {
         RegisterClientCallback,
@@ -266,8 +283,8 @@ namespace {
         ConnectClientCallback, // connect_callback
         DisconnectClientCallback, // disconnect_callback
         search_complete_callback,
-        NULL, //register_for_notification_cb,
-        NULL, //notify_cb,
+        register_for_notification_cb,
+        notify_cb,
         read_characteristic_cb,
         write_characteristic_cb,
         NULL, // read_descriptor_cb,
@@ -525,6 +542,29 @@ uint16_t RivieraGattClient::Connection::find_characteristic_handle_from_uuid(Riv
     return return_handle;
 }
 
+
+int RivieraGattClient::Connection::RegisterNotification(RivieraBT::UUID uuid)
+{
+    int result = s_gatt_client_interface->register_for_notification(s_client_if, s_bda, m_data->handles[uuid]);
+    if (BT_STATUS_SUCCESS != result) {
+        std::cerr << __func__ << ": register FAILED with code " << result << std::endl;
+        return -1;
+    }
+    m_data->available = false;
+    return 0;
+}
+
+
+int RivieraGattClient::Connection::DeregisterNotification(RivieraBT::UUID uuid)
+{
+    int result = s_gatt_client_interface->deregister_for_notification(s_client_if, s_bda, m_data->handles[uuid]);
+    if (BT_STATUS_SUCCESS != result) {
+        std::cerr << __func__ << ": deregister FAILED with code " << result << std::endl;
+        return -1;
+    }
+    return 0;
+    m_data->available = false;
+}
 
 
 int RivieraGattClient::Connection::WriteCharacteristic(RivieraBT::UUID uuid, std::string to_write)
