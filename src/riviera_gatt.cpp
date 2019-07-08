@@ -220,7 +220,7 @@ namespace {
             return;
         }
         std::cout << "Write on connection  '" << s_connections[conn_id].connection->GetName() << "', handle 0x" << 
-            std::hex << handle << std::dec << " complete with status code " << status << std::endl;
+            std::hex << handle << std::dec << " complete with status code " << std::hex << status << std::dec << std::endl;
         s_connections[conn_id].available = true;
     }
 
@@ -232,6 +232,9 @@ namespace {
             return;
         }
         
+        std::cout << "Read on connection  " << s_connections[conn_id].connection->GetName() <<
+         " complete with status code " << std::hex << status << std::dec << std::endl;
+
         if (!p_data) {
             std::cerr << __func__ << ": no data recieved!" << std::endl;
         } else {
@@ -256,6 +259,7 @@ namespace {
         //s_connections[conn_id].mtu = mtu; // TODO: add back in once status code is observed to work as expected
         std::cout << __func__ << ": MTU for connection ID " << conn_id << " negotiated to " << mtu << 
             " with status code " << status << std::endl;
+        s_connections[conn_id].mtu = mtu;
         s_connections[conn_id].available = true;
     }
 
@@ -506,9 +510,9 @@ void RivieraGattClient::Connection::fetch_services(void)
     std::cout << "Fetching gatt database..." << std::endl;
     m_data->available = false;
     s_gatt_client_interface->get_gatt_db(s_conn_id); // Need to do search_services before this will work
-    std::cout << std::dec << __FILE__ << "/" <<  __func__ << __LINE__ << " TRACKING!!!" << std::endl;
+    //std::cout << std::dec << __FILE__ << "/" <<  __func__ << " " << __LINE__ << " TRACKING!!!" << std::endl;
     while(!m_data->available);
-    std::cout << std::dec << __FILE__ << "/" <<  __func__ << __LINE__ << " TRACKING!!!" << std::endl;
+    //std::cout << std::dec << __FILE__ << "/" <<  __func__ << " " << __LINE__ << " TRACKING!!!" << std::endl;
 
     fill_handle_map();
     std::cout << "Finished attempt to fill handle map" << std::endl;
@@ -567,6 +571,27 @@ int RivieraGattClient::Connection::DeregisterNotification(RivieraBT::UUID uuid)
 }
 
 
+bool RivieraGattClient::Connection::Available()
+{
+    return m_data->available;
+}
+
+
+
+int RivieraGattClient::Connection::WaitForAvailable(unsigned int timeout)
+{
+    // TODO: This is a hack, add a timeout or something
+    while (!Available());
+    return 0;
+}
+
+
+int RivieraGattClient::Connection::WriteCharacteristicWhenAvailable(RivieraBT::UUID uuid, std::string to_write, unsigned int timeout) {
+    WaitForAvailable(timeout);
+    return WriteCharacteristic(uuid, to_write);
+}
+
+
 int RivieraGattClient::Connection::WriteCharacteristic(RivieraBT::UUID uuid, std::string to_write)
 {
     if (!m_data->available) {
@@ -575,6 +600,7 @@ int RivieraGattClient::Connection::WriteCharacteristic(RivieraBT::UUID uuid, std
     }
     
     if (m_data->handles.empty()) {
+        
        fetch_services();
     }
     
@@ -604,6 +630,13 @@ std::string RivieraGattClient::Connection::ReadCharacteristic(RivieraBT::UUID uu
 }
 
 
+int RivieraGattClient::Connection::ReadCharacteristicWhenAvailable(RivieraBT::UUID uuid, ReadCallback cb, unsigned int timeout)
+{
+    WaitForAvailable(timeout);
+    return ReadCharacteristic(uuid, cb);
+}
+
+
 int RivieraGattClient::Connection::ReadCharacteristic(RivieraBT::UUID uuid, ReadCallback cb)
 {
     // Removing to see if we can get multiple consecutive reads goin
@@ -611,10 +644,6 @@ int RivieraGattClient::Connection::ReadCharacteristic(RivieraBT::UUID uuid, Read
     //    std::cerr << "Connection busy" << std::endl;
     //    return -1;
     //}
-    
-    // TODO: This is a hack, add a timeout or something
-    while (!m_data->available);
-    
     if (m_data->handles.empty()) {
        fetch_services();
     }
@@ -631,7 +660,7 @@ int RivieraGattClient::Connection::ReadCharacteristic(RivieraBT::UUID uuid, Read
         return -1;
     }
     m_data->available = false;
-    //std::cout << "Read done. Waiting for response..." << std::endl;
+    std::cout << "Read done. Waiting for response..." << std::endl;
     return 0;
 }
 

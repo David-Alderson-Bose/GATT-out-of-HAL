@@ -44,12 +44,29 @@ namespace RivieraGattClient {
         bool Available();
 
         /**
+         * Blocks until connection is available again or timeout occurs
+         * @param timeout: miliseconds to wait before returning. Set to zero to wait indefinitely. 
+         * @return: 0 if returning on connection available, non-zero if returning on timeout
+         */
+        int WaitForAvailable(unsigned int timeout = 0); 
+
+        /**
          * Write to a characteristic of the connected device
          * @param uuid: 16-byte uuid of characteristic
+         * @param to_write: data to write
          * @return: Non-zero on faulure, zero on success
          */
         int WriteCharacteristic(RivieraBT::UUID, std::string to_write);
-        
+
+        /**
+         * Write to a characterisitic of the connected device once it's available
+         * @param uuid: 16-byte uuid of characteristic
+         * @param to_write: data to write
+         * @param timeout: miliseconds to wait for availability
+         * @return: Non-zero on faulure, zero on success
+         */  
+        int WriteCharacteristicWhenAvailable(RivieraBT::UUID, std::string to_write, unsigned int timeout = 0);
+
         /**
          * Read from a characteristic of the connected device. Blocking.
          * @param uuid: 16-byte uuid of characteristic
@@ -64,6 +81,14 @@ namespace RivieraGattClient {
          * @return: zero on success, non-zero on failure
          */
         int ReadCharacteristic(RivieraBT::UUID uuid, ReadCallback cb);
+
+        /**
+         * Read from a characteristic of the connected device. Non-Blocking.
+         * @param uuid: 16-byte uuid of characteristic
+         * @param cb: callback function to handle data when it arrives
+         * @return: zero on success, non-zero on failure
+         */
+        int ReadCharacteristicWhenAvailable(RivieraBT::UUID uuid, ReadCallback cb, unsigned int timeout = 0);
 
         /**
          * TODO
