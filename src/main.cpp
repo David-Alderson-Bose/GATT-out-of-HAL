@@ -78,7 +78,7 @@ void signal_handler(int signum)
  * @param len: length of byte string to write
  * @return: zero on success, -1 on write failure, number of incorrect bytes on readback failure
  */ 
-int write_n_readback(RivieraGattClient::ConnectionPtr connection, RivieraBT::UUID uuid, unsigned int len)
+int write_n_readback(RivieraGattClient::ConnectionPtr connection, RivieraBT::UUID uuid, unsigned int len = 10)
 {
     static const int ASCII_NUMERIC_OFFSET = 48;
 
@@ -132,7 +132,7 @@ int main(int argc, char **argv)
     }
     std::cout << "Android HAL BT setup complete" << std::endl;
 
-    std::vector<std::string> devices = {RIGHT_BUD, LEFT_BUD};
+    std::vector<std::string> devices = {LEFT_BUD, RIGHT_BUD};
 
     for (auto& device : devices) {
         // Connect
@@ -152,7 +152,7 @@ int main(int argc, char **argv)
         }
 
         // Write & read
-        int incorrect_digits = write_n_readback(connection, READ_N_WRITE_UUID, actual_mtu);
+        int incorrect_digits = write_n_readback(connection, READ_N_WRITE_UUID); //, actual_mtu);
         std::cout << "Write & read numeric result: " << incorrect_digits << std::endl;
 
         // TODO: Remove this once bugs are gone

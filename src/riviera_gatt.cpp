@@ -473,7 +473,7 @@ RivieraGattClient::Connection::Connection(std::string name, int conn_id, bt_bdad
 
 void RivieraGattClient::Connection::PrintHandles() {
     for (auto& kv: m_data->handles) {
-        std::cout << RivieraBT::StringifyUUID(kv.first) << " : " << kv.second << std::endl; 
+        std::cout << "  " << RivieraBT::StringifyUUID(kv.first) << " : " << kv.second << std::endl; 
     }
 }
 
@@ -488,7 +488,7 @@ void RivieraGattClient::Connection::fill_handle_map()
         if (m_data->handles_db.get()[entry].type != BTGATT_DB_CHARACTERISTIC) {
             continue;
         }
-        std::cout << "Adding entry for " << m_data->handles_db.get()[entry].attribute_handle << std::endl;
+        std::cout << "  Adding entry for " << m_data->handles_db.get()[entry].attribute_handle << std::endl;
         RivieraBT::UUID uuid;
         memcpy(uuid.data(), m_data->handles_db.get()[entry].uuid.uu, UUID_BYTES_LEN);
         m_data->handles[uuid] = m_data->handles_db.get()[entry].attribute_handle;
@@ -618,7 +618,8 @@ int RivieraGattClient::Connection::WriteCharacteristic(RivieraBT::UUID uuid, std
     }
     
     m_data->available = false;
-    std::cout << "Write  done. Waiting for response..." << std::endl;
+    std::cout << "Wrote " << to_write << " to UUID " << uuid_str << ", handle 0x" << 
+        std::hex << static_cast<int>(handle) << std::dec << ". Waiting for response..." << std::endl;
 
     return 0;
 }
