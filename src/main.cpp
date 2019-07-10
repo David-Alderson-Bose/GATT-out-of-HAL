@@ -29,6 +29,7 @@ namespace { // Anonymous namespace for connection properties
     // Bud names
     const std::string  LEFT_BUD("Rubeus_accel_demo_L");
     const std::string RIGHT_BUD("Rubeus_accel_demo_R");
+    const std::string FONE("da_fone");
 
     // Bud accelerometer axes
     const RivieraBT::UUID BUD_X_AXIS = {
@@ -97,7 +98,8 @@ int write_n_readback(RivieraGattClient::ConnectionPtr connection, RivieraBT::UUI
    
    
     std::cout << "Testing write & readback with string: " << test_str << std::endl;
-    connection->WriteCharacteristicWhenAvailable(uuid, test_str);        
+    //connection->WriteCharacteristicWhenAvailable(uuid, test_str);
+    connection->WriteCharacteristic(uuid, test_str);
 
     // Readback
     int incorrect_digits = 0;
@@ -132,7 +134,7 @@ int main(int argc, char **argv)
     }
     std::cout << "Android HAL BT setup complete" << std::endl;
 
-    std::vector<std::string> devices = {LEFT_BUD, RIGHT_BUD};
+    std::vector<std::string> devices = {RIGHT_BUD, LEFT_BUD };
 
     for (auto& device : devices) {
         // Connect
@@ -141,7 +143,7 @@ int main(int argc, char **argv)
             std::cerr << "Could not connect to " << device << "!" << std::endl;
             continue;
         }
-
+        /*
         // Increase MTU
         connection->SetMTU(READ_N_WRITE_MTU);
         connection->WaitForAvailable();
@@ -154,6 +156,8 @@ int main(int argc, char **argv)
         // Write & read
         int incorrect_digits = write_n_readback(connection, READ_N_WRITE_UUID); //, actual_mtu);
         std::cout << "Write & read numeric result: " << incorrect_digits << std::endl;
+        */
+        connection->WriteCharacteristic(READ_N_WRITE_UUID, "hello from eddie");
 
         // TODO: Remove this once bugs are gone
         break;

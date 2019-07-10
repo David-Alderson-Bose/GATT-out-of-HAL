@@ -225,6 +225,14 @@ namespace {
     }
 
 
+    void execute_write_cb(int conn_id, int status)
+    {
+        std::cout << "Write executed on connection '" << s_connections[conn_id].connection->GetName() << 
+            "' (conn_id " << conn_id << " with status 0x" << std::hex << status << std::dec << std::endl; 
+        s_connections[conn_id].available = true;
+    }
+
+
     void read_characteristic_cb(int conn_id, int status, btgatt_read_params_t *p_data)
     {
         if (s_connections.count(conn_id) == 0 || !s_connections[conn_id].connection) {
@@ -293,7 +301,7 @@ namespace {
         write_characteristic_cb,
         NULL, // read_descriptor_cb,
         NULL, // write_descriptor_cb,
-        NULL, // execute_write_cb,
+        execute_write_cb,
         NULL, // read_remote_rssi_callback
         NULL, // ListenCallback,
         configure_mtu_callback,
@@ -616,10 +624,21 @@ int RivieraGattClient::Connection::WriteCharacteristic(RivieraBT::UUID uuid, std
         std::cerr << __func__ << ": Write FAILED with code " << result << std::endl;
         return -1;
     }
-    
+
     m_data->available = false;
     std::cout << "Wrote " << to_write << " to UUID " << uuid_str << ", handle 0x" << 
         std::hex << static_cast<int>(handle) << std::dec << ". Waiting for response..." << std::endl;
+
+    /*
+    WaitForAvailable();
+    std::cout << "executing write" << std::endl;
+    result = s_gatt_client_interface->execute_write(s_conn_id, 1);
+    if (BT_STATUS_SUCCESS != result) {
+        std::cerr << __func__ << ": Write execute FAILED with code " << result << std::endl;
+        return -1;
+    }
+    m_data->available = false;
+    */
 
     return 0;
 }
