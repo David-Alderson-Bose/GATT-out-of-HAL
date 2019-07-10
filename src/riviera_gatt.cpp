@@ -219,8 +219,8 @@ namespace {
             std::cerr << __func__ << ": got bad write callback on unclaimed conn_id " << conn_id;
             return;
         }
-        std::cout << "Write on connection  '" << s_connections[conn_id].connection->GetName() << "', handle 0x" << 
-            std::hex << handle << std::dec << " complete with status code " << std::hex << status << std::dec << std::endl;
+        //std::cout << "Write on connection  '" << s_connections[conn_id].connection->GetName() << "', handle 0x" << 
+        //    std::hex << handle << std::dec << " complete with status code " << std::hex << status << std::dec << std::endl;
         s_connections[conn_id].available = true;
     }
 
@@ -619,27 +619,21 @@ int RivieraGattClient::Connection::WriteCharacteristic(RivieraBT::UUID uuid, std
     }
     
     uint16_t handle = m_data->handles[uuid];
-    int result = s_gatt_client_interface->write_characteristic(m_conn_id, handle, 1, to_write.size(), 0, const_cast<char*>(to_write.c_str()));
+    
+    // third argument is write-type
+    // 0 doesn't work
+    // 1 is write-command (no reply given at stack level)
+    // 2 is write-request (needs reply at stack level)
+    // TODO: Make constants for these
+    int result = s_gatt_client_interface->write_characteristic(m_conn_id, handle, /*1*/2, to_write.size(), 0, const_cast<char*>(to_write.c_str()));
     if (BT_STATUS_SUCCESS != result) {
         std::cerr << __func__ << ": Write FAILED with code " << result << std::endl;
         return -1;
     }
 
     m_data->available = false;
-    std::cout << "Wrote " << to_write << " to UUID " << uuid_str << ", handle 0x" << 
-        std::hex << static_cast<int>(handle) << std::dec << ". Waiting for response..." << std::endl;
-
-    /*
-    WaitForAvailable();
-    std::cout << "executing write" << std::endl;
-    result = s_gatt_client_interface->execute_write(s_conn_id, 1);
-    if (BT_STATUS_SUCCESS != result) {
-        std::cerr << __func__ << ": Write execute FAILED with code " << result << std::endl;
-        return -1;
-    }
-    m_data->available = false;
-    */
-
+    //std::cout << "Wrote " << to_write << " to UUID " << uuid_str << ", handle 0x" << 
+    //    std::hex << static_cast<int>(handle) << std::dec << ". Waiting for response..." << std::endl;
     return 0;
 }
 

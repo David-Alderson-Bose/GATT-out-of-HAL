@@ -140,4 +140,8 @@ namespace RivieraGattClient {
         std::shared_ptr<ConnectionData> m_data;
     };
 
+
+    // Constants for writing characteristics
+    
+
 }

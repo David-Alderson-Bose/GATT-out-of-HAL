@@ -11,11 +11,12 @@
 // C++ headers
 #include <atomic>
 #include <ctime>
+#include <chrono>
 #include <iostream>
 #include <iomanip>
 #include <mutex>
 #include <sstream>
-#include <unordered_map>
+#include <map>
 #include <vector>
 
 
@@ -50,7 +51,7 @@ namespace { // Anonymous namespace for connection properties
         0x80, 0x79, 0x28, 0x8d, 0x83, 0x01, 0xcd, 0xb9, 
         0xa4, 0x49, 0x8f, 0x28, 0xbd, 0x1d, 0x99, 0x6f
     };
-    const unsigned int READ_N_WRITE_MTU(32 /*512*/);
+    const unsigned int READ_N_WRITE_MTU(/*128*//*192*//*224*/255/*256/*512*/);
 
     // Bookkeeping
     static const int CHANNELS(2);
@@ -69,7 +70,16 @@ void signal_handler(int signum)
 }
 
 
-
+std::string random_digits(unsigned int length) {
+    static const int ASCII_NUMERIC_OFFSET = 48;
+    std::string str;
+    for (int i=0;i<length;++i) {
+        int raw_digit = rand() % 10;
+        char digit = static_cast<char>(raw_digit+ASCII_NUMERIC_OFFSET);
+        str.push_back(digit);
+    }
+    return str;
+}
 
 
 /**
@@ -79,27 +89,17 @@ void signal_handler(int signum)
  * @param len: length of byte string to write
  * @return: zero on success, -1 on write failure, number of incorrect bytes on readback failure
  */ 
-int write_n_readback(RivieraGattClient::ConnectionPtr connection, RivieraBT::UUID uuid, unsigned int len = 10)
+int write_n_readback(RivieraGattClient::ConnectionPtr connection, RivieraBT::UUID uuid, unsigned int len=READ_N_WRITE_MTU)
 {
-    static const int ASCII_NUMERIC_OFFSET = 48;
-
-    // Write
-    /*
-    std::string test_str;
-    for (int i=0;i<len;++i) {
-        int raw_digit = rand() % 10;
-        char digit = static_cast<char>(raw_digit+ASCII_NUMERIC_OFFSET);
-        test_str.push_back(digit);
+    if (!connection) {
+        std::cerr << __func__ << ": ConnectionPtr is null!" << std::endl;
+        return -1;
     }
-    */
-
-    // TODO: Switch to the above
-    std::string test_str("hello_from_eddie"); 
-   
-   
+    
+    // Write
+    std::string test_str = random_digits(len); 
     std::cout << "Testing write & readback with string: " << test_str << std::endl;
-    //connection->WriteCharacteristicWhenAvailable(uuid, test_str);
-    connection->WriteCharacteristic(uuid, test_str);
+    connection->WriteCharacteristicWhenAvailable(uuid, test_str);
 
     // Readback
     int incorrect_digits = 0;
@@ -122,6 +122,36 @@ int write_n_readback(RivieraGattClient::ConnectionPtr connection, RivieraBT::UUI
 }
 
 
+int write_spam(RivieraGattClient::ConnectionPtr connection, RivieraBT::UUID uuid, unsigned int len=READ_N_WRITE_MTU, unsigned int writes=100)
+{
+    if (!connection) {
+        std::cerr << __func__ << ": ConnectionPtr is null!" << std::endl;
+        return -1;
+    }
+
+    // Prep
+    std::string test_str = random_digits(len); 
+    std::cout << "Testing write spam with randomly generated string: " << test_str << std::endl;
+    
+    // Time the writes
+    std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
+    for (int rounds=0;rounds<writes;++rounds) {
+        connection->WriteCharacteristicWhenAvailable(uuid, test_str);
+    }
+    std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+
+    // K we're done
+    //return std::chrono::duration_cast<std::chrono::microseconds>(end - start).count()
+    unsigned int duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    float duration_s = static_cast<float>(duration_ms) / 1000.0;
+    unsigned int total_bytes = len * writes;
+    float bytes_per_mSec = static_cast<float>(total_bytes) / static_cast<float>(duration_ms); 
+    std::cout << "Took " << duration_s << "seconds to write " << len << " bytes " << writes << " times (so " << 
+        total_bytes << " bytes total). So " << bytes_per_mSec << " bytes/millisecond." << std::endl;
+    return 0;
+}
+
+
 int main(int argc, char **argv)
 {
     // Printing PID makes it easier to send SIGTERM
@@ -134,33 +164,36 @@ int main(int argc, char **argv)
     }
     std::cout << "Android HAL BT setup complete" << std::endl;
 
-    std::vector<std::string> devices = {RIGHT_BUD, LEFT_BUD };
+
+    std::map<std::string, RivieraGattClient::ConnectionPtr> devices = {
+        {LEFT_BUD,  nullptr},
+        //{RIGHT_BUD, nullptr}, TODO: 2nd bud always has handle-finding issues, investigate
+    };
 
     for (auto& device : devices) {
         // Connect
-        RivieraGattClient::ConnectionPtr connection = RivieraGattClient::Connect(device);
-        if (connection == nullptr) {
-            std::cerr << "Could not connect to " << device << "!" << std::endl;
+        device.second = RivieraGattClient::Connect(device.first);
+        if (device.second == nullptr) {
+            std::cerr << "Could not connect to " << device.first << "!" << std::endl;
             continue;
         }
-        /*
+        
         // Increase MTU
-        connection->SetMTU(READ_N_WRITE_MTU);
-        connection->WaitForAvailable();
-        unsigned int actual_mtu = connection->GetMTU();
+        device.second->SetMTU(READ_N_WRITE_MTU);
+        device.second->WaitForAvailable();
+        unsigned int actual_mtu = device.second->GetMTU();
         if (READ_N_WRITE_MTU != actual_mtu) {
-            std::cerr << "MTU on device " << device << " is " << actual_mtu << 
+            std::cerr << "MTU on device " << device.first << " is " << actual_mtu << 
                 " instead of desierved " << READ_N_WRITE_MTU << "!" << std::endl;
         }
-
+        
         // Write & read
-        int incorrect_digits = write_n_readback(connection, READ_N_WRITE_UUID); //, actual_mtu);
-        std::cout << "Write & read numeric result: " << incorrect_digits << std::endl;
-        */
-        connection->WriteCharacteristic(READ_N_WRITE_UUID, "hello from eddie");
-
-        // TODO: Remove this once bugs are gone
-        break;
+        //int incorrect_digits = write_n_readback(device.second, READ_N_WRITE_UUID , actual_mtu);
+        //std::cout << "Write & read numeric result: " << incorrect_digits << std::endl;
+    
+        // Write spam
+        write_spam(device.second, READ_N_WRITE_UUID, actual_mtu, 100);
+        std::cout << std::endl << std::endl << std::endl;
     }
 
     // So long suckers!
