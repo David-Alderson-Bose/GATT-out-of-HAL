@@ -594,13 +594,13 @@ int RivieraGattClient::Connection::WaitForAvailable(unsigned int timeout)
 }
 
 
-int RivieraGattClient::Connection::WriteCharacteristicWhenAvailable(RivieraBT::UUID uuid, std::string to_write, unsigned int timeout) {
+int RivieraGattClient::Connection::WriteCharacteristicWhenAvailable(RivieraBT::UUID uuid, std::string to_write, RivieraGattClient::Connection::WriteType type, unsigned int timeout) {
     WaitForAvailable(timeout);
-    return WriteCharacteristic(uuid, to_write);
+    return WriteCharacteristic(uuid, to_write, type);
 }
 
 
-int RivieraGattClient::Connection::WriteCharacteristic(RivieraBT::UUID uuid, std::string to_write)
+int RivieraGattClient::Connection::WriteCharacteristic(RivieraBT::UUID uuid, std::string to_write, RivieraGattClient::Connection::WriteType type)
 {
     if (!m_data->available) {
         std::cerr << "Connection busy" << std::endl;
@@ -619,13 +619,23 @@ int RivieraGattClient::Connection::WriteCharacteristic(RivieraBT::UUID uuid, std
     }
     
     uint16_t handle = m_data->handles[uuid];
-    
+
+    int type_numeric;
+    if (type == RivieraGattClient::Connection::WriteType::COMMAND) {
+        type_numeric = 1;
+    } else if (type = RivieraGattClient::Connection::WriteType::REQUEST) {
+	type_numeric = 2;
+    } else {
+        std::cerr << __func__ << ": Unavailable write type!" << std::endl;
+        return -1;
+    }
+
     // third argument is write-type
     // 0 doesn't work
     // 1 is write-command (no reply given at stack level)
     // 2 is write-request (needs reply at stack level)
     // TODO: Make constants for these
-    int result = s_gatt_client_interface->write_characteristic(m_conn_id, handle, /*1*/2, to_write.size(), 0, const_cast<char*>(to_write.c_str()));
+    int result = s_gatt_client_interface->write_characteristic(m_conn_id, handle, type_numeric/*1 2*/, to_write.size(), 0, const_cast<char*>(to_write.c_str()));
     if (BT_STATUS_SUCCESS != result) {
         std::cerr << __func__ << ": Write FAILED with code " << result << std::endl;
         return -1;

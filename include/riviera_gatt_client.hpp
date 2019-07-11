@@ -48,7 +48,10 @@ namespace RivieraGattClient {
          * @param timeout: miliseconds to wait before returning. Set to zero to wait indefinitely. 
          * @return: 0 if returning on connection available, non-zero if returning on timeout
          */
-        int WaitForAvailable(unsigned int timeout = 0); 
+        int WaitForAvailable(unsigned int timeout = 0);
+
+        // Enum for setting write type
+        enum WriteType { COMMAND, REQUEST }; 
 
         /**
          * Write to a characteristic of the connected device
@@ -56,7 +59,7 @@ namespace RivieraGattClient {
          * @param to_write: data to write
          * @return: Non-zero on faulure, zero on success
          */
-        int WriteCharacteristic(RivieraBT::UUID, std::string to_write);
+        int WriteCharacteristic(RivieraBT::UUID, std::string to_write, WriteType type = COMMAND);
 
         /**
          * Write to a characterisitic of the connected device once it's available
@@ -65,7 +68,7 @@ namespace RivieraGattClient {
          * @param timeout: miliseconds to wait for availability
          * @return: Non-zero on faulure, zero on success
          */  
-        int WriteCharacteristicWhenAvailable(RivieraBT::UUID, std::string to_write, unsigned int timeout = 0);
+        int WriteCharacteristicWhenAvailable(RivieraBT::UUID, std::string to_write, WriteType type = COMMAND, unsigned int timeout = 0);
 
         /**
          * Read from a characteristic of the connected device. Blocking.
