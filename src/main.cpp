@@ -175,7 +175,7 @@ int main(int argc, char **argv)
     std::cout << "Process ID: " << getpid() << std::endl;
     std::cout << "Setting max process priority..." << std::endl;
     int which = PRIO_PROCESS;
-    int priority = -20; // highes priority according to niceness, see https://linux.die.net/man/3/setpriority
+    int priority = -20; // highes priority according to niceness, see https://linux.die.net/man/3/setpriority and https://askubuntu.com/a/1078563
     if (setpriority(which, pid, priority) != 0) {
         std::cerr << "Could not set max priority: " << strerror(errno) << " Why even bother????" << std::endl;
         return -1;
