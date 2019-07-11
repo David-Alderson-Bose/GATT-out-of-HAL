@@ -47,9 +47,13 @@ namespace { // Anonymous namespace for connection properties
     };
 
     // Read/Write testing
-    const RivieraBT::UUID READ_N_WRITE_UUID = {
+    const RivieraBT::UUID READ_N_WRITE_COMMAND = {
         0x80, 0x79, 0x28, 0x8d, 0x83, 0x01, 0xcd, 0xb9, 
         0xa4, 0x49, 0x8f, 0x28, 0xbd, 0x1d, 0x99, 0x6f
+    };
+    const RivieraBT::UUID READ_N_WRITE_REQUEST = { 
+        0xec, 0x56, 0x0c, 0x8c, 0x24, 0x8d, 0x25, 0xb1, 
+        0x2f, 0x42, 0x4f, 0xf8, 0x38, 0x8b, 0x72, 0x6f 
     };
     const unsigned int READ_N_WRITE_MTU(/*128*//*192*//*224*/255/*256/*512*/);
     const unsigned int HEADER_SIZE(3);
@@ -173,25 +177,26 @@ int main(int argc, char **argv)
     }
     std::cout << "Android HAL BT setup complete" << std::endl;
 
-    // TODO: this is old news. Delete once NEW HOTNESS is implemented
-    std::map<std::string, RivieraGattClient::ConnectionPtr> devices_X = {
-        {LEFT_BUD,  nullptr},
-        //{RIGHT_BUD, nullptr}, TODO: 2nd bud always has handle-finding issues, investigate
-    };
-
-    std::vector<std::tuple<std::string, RivieraGattClient::ConnectionPtr, RivieraGattClient::Connection::WriteType>> devices = {
-        //std::make_tuple(LEFT_BUD,  nullptr,  RivieraGattClient::Connection::WriteType::COMMAND),
-        std::make_tuple(RIGHT_BUD, nullptr,  RivieraGattClient::Connection::WriteType::REQUEST),
+    // Test containers
+    // TODO: tuple is kinda ugly, maybe make a full on testing struct
+    std::vector<std::tuple<std::string, RivieraGattClient::ConnectionPtr, RivieraGattClient::Connection::WriteType, RivieraBT::UUID>> devices = {
+        std::make_tuple(LEFT_BUD,  nullptr,  RivieraGattClient::Connection::WriteType::REQUEST, READ_N_WRITE_REQUEST),
+        std::make_tuple(LEFT_BUD,  nullptr,  RivieraGattClient::Connection::WriteType::COMMAND, READ_N_WRITE_COMMAND),
+        std::make_tuple(RIGHT_BUD, nullptr,  RivieraGattClient::Connection::WriteType::REQUEST, READ_N_WRITE_REQUEST),
+        std::make_tuple(RIGHT_BUD, nullptr,  RivieraGattClient::Connection::WriteType::COMMAND, READ_N_WRITE_COMMAND),
     };
 
     for (auto& device : devices) {
+        std::cout << std::endl << std::endl;
+        std::cout << "************************************************" << std::endl;
+
         // Connect
         std::get<1>(device) = RivieraGattClient::Connect(std::get<0>(device));
         if (std::get<1>(device) == nullptr) {
             std::cerr << "Could not connect to " << std::get<0>(device) << "!" << std::endl;
             continue;
         }
-        
+
         // Increase MTU
         std::get<1>(device)->SetMTU(READ_N_WRITE_MTU);
         std::get<1>(device)->WaitForAvailable();
@@ -202,9 +207,20 @@ int main(int argc, char **argv)
         }
         unsigned int actual_msg_size = actual_mtu-HEADER_SIZE;
         
+        // Confirm write type        
+        if (std::get<2>(device) == RivieraGattClient::Connection::WriteType::REQUEST) {
+            std::cout << "This test is for write-REQUEST!" << std::endl;
+        } else if (std::get<2>(device) == RivieraGattClient::Connection::WriteType::COMMAND) {
+            std::cout << "This test is for write-COMMAND!" << std::endl;
+        } else {
+            std::cerr << "Hey you tried to slide a bad write type by me you jerk!" <<
+                " I'm gonna skip this test for that." << std::endl;
+            continue;
+        }
+
         // Write & read
         std::cout << "Checking that writes will go through..." << std::endl;
-        int incorrect_digits = write_n_readback(std::get<1>(device), READ_N_WRITE_UUID, std::get<2>(device), actual_msg_size);
+        int incorrect_digits = write_n_readback(std::get<1>(device), std::get<3>(device), std::get<2>(device), actual_msg_size);
         std::cout << "Write & read numeric result: " << incorrect_digits << std::endl;
         if (incorrect_digits != 0) {
             std::cerr << "Non-zero result. That's no good! Check the characteristic and try again, please!" << std::endl;
@@ -213,11 +229,11 @@ int main(int argc, char **argv)
         std::cout << "Looks writable. Proceeding to write spam..." << std::endl;
 
         // Write spam
-        write_spam(std::get<1>(device), READ_N_WRITE_UUID, std::get<2>(device), actual_msg_size, 100);
-        std::cout << std::endl << std::endl << std::endl;
+        write_spam(std::get<1>(device), std::get<3>(device), std::get<2>(device), actual_msg_size, 100);
     }
 
     // So long suckers!
+    std::cout << std::endl << std::endl;
     RivieraBT::Shutdown();
     std::cout << "bye bye!" << std::endl;
     return 0;

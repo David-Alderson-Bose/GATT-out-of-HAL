@@ -418,8 +418,8 @@ RivieraGattClient::ConnectionPtr RivieraGattClient::Connect(std::string name, bo
     // Do something else if multiples of same name are allowed
     for (auto& kv: s_connections) {
         if (kv.second.connection && kv.second.connection->GetName() == name) {
-            std::cerr << "Already registered " << name << std::endl;
-            return nullptr;
+            std::cout << "Already registered " << name << ", so returning pointer to it" << std::endl;
+            return kv.second.connection;
         }
     } 
     
