@@ -7,6 +7,9 @@
 #include <unistd.h>  // for pause & getpid
 #include <signal.h>
 #include <string.h>  // for strsignal
+#include <sys/resource.h> // set priority
+
+
 
 // C++ headers
 #include <atomic>
@@ -168,7 +171,17 @@ int write_spam(RivieraGattClient::ConnectionPtr connection,
 int main(int argc, char **argv)
 {
     // Printing PID makes it easier to send SIGTERM
+    id_t pid = getpid();
     std::cout << "Process ID: " << getpid() << std::endl;
+    std::cout << "Setting max process priority..." << std::endl;
+    int which = PRIO_PROCESS;
+    int priority = -20; // highes priority according to niceness, see https://linux.die.net/man/3/setpriority
+    if (setpriority(which, pid, priority) != 0) {
+        std::cerr << "Could not set max priority: " << strerror(errno) << " Why even bother????" << std::endl;
+        return -1;
+    }
+    std::cout << "Max priority set!" << std::endl;
+    
     
     // What's this?? A BLUETOOTH CALLLLL?????? :-O
     if (0 != RivieraBT::Setup()) {
