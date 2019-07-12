@@ -594,6 +594,12 @@ int RivieraGattClient::Connection::WaitForAvailable(unsigned int timeout)
 }
 
 
+        
+#undef WRITE_TYPE
+#define WRITE_TYPE(x) #x, 
+const std::vector<std::string> RivieraGattClient::Connection::WriteTypes = { WRITE_TYPES };
+
+
 int RivieraGattClient::Connection::WriteCharacteristicWhenAvailable(RivieraBT::UUID uuid, std::string to_write, RivieraGattClient::Connection::WriteType type, unsigned int timeout) {
     WaitForAvailable(timeout);
     return WriteCharacteristic(uuid, to_write, type);
@@ -650,7 +656,19 @@ int RivieraGattClient::Connection::WriteCharacteristic(RivieraBT::UUID uuid, std
 
 std::string RivieraGattClient::Connection::ReadCharacteristic(RivieraBT::UUID uuid)
 {
-    return std::string();
+    std::atomic_bool read_done(false);
+    std::string ret_string;
+    RivieraGattClient::ReadCallback read_cb = [&] (char* buf, size_t length) {
+        ret_string = std::string(buf, length);
+        read_done = true;
+    };
+    int read_return = ReadCharacteristic(uuid, read_cb);
+    if (read_return != 0) {
+        // empty string on failure
+        return std::string();
+    }
+    while(!read_done); // Kill time until read is done
+    return ret_string;
 }
 
 

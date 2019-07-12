@@ -50,8 +50,14 @@ namespace RivieraGattClient {
          */
         int WaitForAvailable(unsigned int timeout = 0);
 
-        // Enum for setting write type
-        enum WriteType { COMMAND, REQUEST }; 
+        // X Macro to generate write types
+        // https://en.wikipedia.org/wiki/X_macro
+        #define WRITE_TYPES \
+            WRITE_TYPE(COMMAND) \
+            WRITE_TYPE(REQUEST)
+        #define WRITE_TYPE(x) x,
+        enum WriteType { WRITE_TYPES };
+        static const std::vector<std::string> WriteTypes;
 
         /**
          * Write to a characteristic of the connected device

@@ -6,7 +6,7 @@
 // C headers
 #include <unistd.h>  // for pause & getpid
 #include <signal.h>
-#include <string.h>  // for strsignal
+#include <string.h>  // for strsignal 
 #include <sys/resource.h> // set priority
 
 
@@ -27,11 +27,11 @@
 // MY headers
 #include <riviera_bt.hpp>
 #include <riviera_gatt_client.hpp>
-
+#include <gatt_speed_test.hpp>
 
 namespace { // Anonymous namespace for connection properties
     // Bud names
-    const std::string  LEFT_BUD("Rubeus_accel_demo_L");
+    const std::string LEFT_BUD("Rubeus_accel_demo_L");
     const std::string RIGHT_BUD("Rubeus_accel_demo_R");
     const std::string FONE("da_fone");
 
@@ -49,19 +49,7 @@ namespace { // Anonymous namespace for connection properties
         0x12, 0x48, 0xb4, 0x5e, 0x6d, 0x85, 0x0e, 0x60
     };
 
-    // Read/Write testing
-    const RivieraBT::UUID READ_N_WRITE_COMMAND = {
-        0x80, 0x79, 0x28, 0x8d, 0x83, 0x01, 0xcd, 0xb9, 
-        0xa4, 0x49, 0x8f, 0x28, 0xbd, 0x1d, 0x99, 0x6f
-    };
-    const RivieraBT::UUID READ_N_WRITE_REQUEST = { 
-        0xec, 0x56, 0x0c, 0x8c, 0x24, 0x8d, 0x25, 0xb1, 
-        0x2f, 0x42, 0x4f, 0xf8, 0x38, 0x8b, 0x72, 0x6f 
-    };
-    const unsigned int READ_N_WRITE_MTU(/*128*//*192*//*224*/255/*256/*512*/);
-    const unsigned int HEADER_SIZE(3);
-    const unsigned int READ_N_WRITE_MSG_SIZE(READ_N_WRITE_MTU-HEADER_SIZE); // Need three bytes for header stuff
-
+   
     // Bookkeeping
     static const int CHANNELS(2);
     static const int AXES(3);
@@ -79,93 +67,9 @@ void signal_handler(int signum)
 }
 
 
-std::string random_digits(unsigned int length) {
-    static const int ASCII_NUMERIC_OFFSET = 48;
-    std::string str;
-    for (int i=0;i<length;++i) {
-        int raw_digit = rand() % 10;
-        char digit = static_cast<char>(raw_digit+ASCII_NUMERIC_OFFSET);
-        str.push_back(digit);
-    }
-    return str;
-}
 
 
-/**
- * Writes a random string of bytes to the uuid and checks if they have all been written
- * @param connection: gatt client connection
- * @param uuid: uuid to write to and read back from
- * @param len: length of byte string to write
- * @return: zero on success, -1 on write failure, number of incorrect bytes on readback failure
- */ 
-int write_n_readback(RivieraGattClient::ConnectionPtr connection, 
-                     RivieraBT::UUID uuid, 
-                     RivieraGattClient::Connection::WriteType type,
-                     unsigned int len=READ_N_WRITE_MSG_SIZE)
-{
-    if (!connection) {
-        std::cerr << __func__ << ": ConnectionPtr is null!" << std::endl;
-        return -1;
-    }
-    
-    // Write
-    std::string test_str = random_digits(len); 
-    std::cout << "Testing write & readback with string: " << test_str << std::endl;
-    connection->WriteCharacteristicWhenAvailable(uuid, test_str, type);
 
-    // Readback
-    int incorrect_digits = 0;
-    std::atomic_bool read_done(false);
-    RivieraGattClient::ReadCallback read_cb = [&] (char* buf, size_t length) {
-        //std::cout << "Get string back: " << std::string(buf, length) << std::endl;
-        if (length != test_str.length()) {
-            std::cerr << "String length should be " << test_str.length() << " but it's " << length << "!" << std::endl;
-            incorrect_digits = test_str.length();
-        } else {
-            incorrect_digits = strncmp(buf, test_str.c_str(), length);
-        }
-        read_done = true;
-    };
-    connection->ReadCharacteristicWhenAvailable(uuid, read_cb);
-
-    // Wait around 
-    while (!read_done);
-    return incorrect_digits;
-}
-
-
-int write_spam(RivieraGattClient::ConnectionPtr connection, 
-               RivieraBT::UUID uuid, 
-               RivieraGattClient::Connection::WriteType type, 
-               unsigned int len=READ_N_WRITE_MSG_SIZE, 
-               unsigned int writes=100)
-{
-    if (!connection) {
-        std::cerr << __func__ << ": ConnectionPtr is null!" << std::endl;
-        return -1;
-    }
-
-    // Prep
-    std::string test_str = random_digits(len); 
-    std::cout << "Testing write spam with randomly generated string: " << test_str << std::endl;
-    
-    // Time the writes
-    std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
-    for (int rounds=0;rounds<writes;++rounds) {
-        connection->WriteCharacteristicWhenAvailable(uuid, test_str, type);
-    }
-    std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-
-    // K we're done
-    //return std::chrono::duration_cast<std::chrono::microseconds>(end - start).count()
-    unsigned int duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-    float duration_s = static_cast<float>(duration_ms) / 1000.0;
-    unsigned int total_bytes = len * writes;
-    float bytes_per_mSec = static_cast<float>(total_bytes) / static_cast<float>(duration_ms); 
-    std::cout << "Took " << duration_s << "seconds to write " << len << " bytes " << writes << " times (so " << 
-        total_bytes << " bytes total). So " << bytes_per_mSec << " bytes/millisecond." << std::endl;
-    return 0;
-}
 
 
 int main(int argc, char **argv)
@@ -190,60 +94,10 @@ int main(int argc, char **argv)
     }
     std::cout << "Android HAL BT setup complete" << std::endl;
 
-    // Test containers
-    // TODO: tuple is kinda ugly, maybe make a full on testing struct
-    std::vector<std::tuple<std::string, RivieraGattClient::ConnectionPtr, RivieraGattClient::Connection::WriteType, RivieraBT::UUID>> devices = {
-        std::make_tuple(LEFT_BUD,  nullptr,  RivieraGattClient::Connection::WriteType::REQUEST, READ_N_WRITE_REQUEST),
-        std::make_tuple(LEFT_BUD,  nullptr,  RivieraGattClient::Connection::WriteType::COMMAND, READ_N_WRITE_COMMAND),
-        std::make_tuple(RIGHT_BUD, nullptr,  RivieraGattClient::Connection::WriteType::REQUEST, READ_N_WRITE_REQUEST),
-        std::make_tuple(RIGHT_BUD, nullptr,  RivieraGattClient::Connection::WriteType::COMMAND, READ_N_WRITE_COMMAND),
-    };
 
-    for (auto& device : devices) {
-        std::cout << std::endl << std::endl;
-        std::cout << "************************************************" << std::endl;
+    // All under one umbrella now
+    GattWriteSpeedTest(std::vector<std::string>({LEFT_BUD, RIGHT_BUD}));
 
-        // Connect
-        std::get<1>(device) = RivieraGattClient::Connect(std::get<0>(device));
-        if (std::get<1>(device) == nullptr) {
-            std::cerr << "Could not connect to " << std::get<0>(device) << "!" << std::endl;
-            continue;
-        }
-
-        // Increase MTU
-        std::get<1>(device)->SetMTU(READ_N_WRITE_MTU);
-        std::get<1>(device)->WaitForAvailable();
-        unsigned int actual_mtu = std::get<1>(device)->GetMTU();
-        if (READ_N_WRITE_MTU != actual_mtu) {
-            std::cerr << "MTU on device " << std::get<0>(device) << " is " << actual_mtu << 
-                " instead of desierved " << READ_N_WRITE_MTU << "!" << std::endl;
-        }
-        unsigned int actual_msg_size = actual_mtu-HEADER_SIZE;
-        
-        // Confirm write type        
-        if (std::get<2>(device) == RivieraGattClient::Connection::WriteType::REQUEST) {
-            std::cout << "This test is for write-REQUEST!" << std::endl;
-        } else if (std::get<2>(device) == RivieraGattClient::Connection::WriteType::COMMAND) {
-            std::cout << "This test is for write-COMMAND!" << std::endl;
-        } else {
-            std::cerr << "Hey you tried to slide a bad write type by me you jerk!" <<
-                " I'm gonna skip this test for that." << std::endl;
-            continue;
-        }
-
-        // Write & read
-        std::cout << "Checking that writes will go through..." << std::endl;
-        int incorrect_digits = write_n_readback(std::get<1>(device), std::get<3>(device), std::get<2>(device), actual_msg_size);
-        std::cout << "Write & read numeric result: " << incorrect_digits << std::endl;
-        if (incorrect_digits != 0) {
-            std::cerr << "Non-zero result. That's no good! Check the characteristic and try again, please!" << std::endl;
-            continue;
-        }
-        std::cout << "Looks writable. Proceeding to write spam..." << std::endl;
-
-        // Write spam
-        write_spam(std::get<1>(device), std::get<3>(device), std::get<2>(device), actual_msg_size, 100);
-    }
 
     // So long suckers!
     std::cout << std::endl << std::endl;
