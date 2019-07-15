@@ -44,9 +44,10 @@ struct ConnectionData {
         std::map<RivieraBT::UUID, int> handles;
         unsigned int mtu;
         std::atomic_bool congested;
+        std::atomic_bool resend_needed;
         ConnectionData() : available(false), handles_db(nullptr), handles_count(-1), 
                            connection(nullptr), read_cb(nullptr), mtu(DEFAULT_MTU),
-                           congested(false) {}
+                           congested(false), resend_needed(false) {}
     };
 
 // Anonymous namespace for data storage
@@ -72,7 +73,8 @@ namespace {
     std::atomic_int s_client_if(-1);
 
     // Testing
-    std::atomic_int writes_since_start(0);
+    std::atomic_int s_write_attempts_since_start(0);
+    std::atomic_int s_writes_complete_since_start(0);
 }
 
 
@@ -227,7 +229,11 @@ namespace {
         //std::cout << "Write on connection  '" << s_connections[conn_id].connection->GetName() << "', handle 0x" << 
         //    std::hex << handle << std::dec << " complete with status code " << std::hex << status << std::dec << std::endl;
         //std::cout << "!!!~DEBUG~!!! writes completed since program start: " << ++writes_since_start << std::endl;
+        //std::cout << "!!!~DEBUG~!!! writes attempted: " << s_write_attempts_since_start << "   write completed " << ++s_writes_complete_since_start << std::endl;
         s_connections[conn_id].available = true;
+        if (s_connections[conn_id].congested) {
+            s_connections[conn_id].resend_needed = true;
+        }
     }
 
 
@@ -246,14 +252,14 @@ namespace {
             return;
         }
         
-        std::cout << "Read on connection  " << s_connections[conn_id].connection->GetName() <<
-         " complete with status code " << std::hex << status << std::dec << std::endl;
+        //std::cout << "Read on connection  " << s_connections[conn_id].connection->GetName() <<
+        // " complete with status code " << std::hex << status << std::dec << std::endl;
 
         if (!p_data) {
             std::cerr << __func__ << ": no data recieved!" << std::endl;
         } else {
-                std::cout << __func__ << ": recieved " << 
-                    std::string(reinterpret_cast<char*>(p_data->value.value), p_data->value.len) << std::endl;
+            //    std::cout << __func__ << ": recieved " << 
+            //        std::string(reinterpret_cast<char*>(p_data->value.value), p_data->value.len) << std::endl;
             if (s_connections[conn_id].read_cb) {
                 s_connections[conn_id].read_cb(reinterpret_cast<char*>(p_data->value.value), p_data->value.len);
                 s_connections[conn_id].read_cb = nullptr; // clear callback
@@ -296,7 +302,10 @@ namespace {
 
 
     void congestion_callback(int conn_id, bool congested) {
-        std::cerr << "!!!!!! Connection " << s_connections[conn_id].connection->GetName() << " (id " << conn_id << ") has congestion status: " << congested << std::endl;
+        //std::cerr << "!!!!!! Connection " << s_connections[conn_id].connection->GetName() << " (id " << conn_id << ") has congestion status: " << congested << std::endl;
+        //if (congested) {
+        //    std::cerr << "   writes attempted: " << s_write_attempts_since_start << "   write completed " << s_writes_complete_since_start << std::endl;
+        //}
         s_connections[conn_id].congested = congested;
     }
 
@@ -681,6 +690,7 @@ int RivieraGattClient::Connection::WriteCharacteristic(RivieraBT::UUID uuid, std
     m_data->available = false;
     //std::cout << "Wrote " << to_write << " to UUID " << uuid_str << ", handle 0x" << 
     //    std::hex << static_cast<int>(handle) << std::dec << ". Waiting for response..." << std::endl;
+    //std::cout << "!!!~WRITE~!!! writes attempted: " << ++s_write_attempts_since_start << "   write completed " << s_writes_complete_since_start << std::endl; 
     return 0;
 }
 
@@ -736,7 +746,7 @@ int RivieraGattClient::Connection::ReadCharacteristic(RivieraBT::UUID uuid, Read
         return -1;
     }
     m_data->available = false;
-    std::cout << "Read done. Waiting for response..." << std::endl;
+    //std::cout << "Read done. Waiting for response..." << std::endl;
     return 0;
 }
 
