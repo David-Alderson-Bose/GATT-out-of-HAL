@@ -68,6 +68,9 @@ namespace {
 
     // Gatt client support 
     std::atomic_int s_client_if(-1);
+
+    // Testing
+    std::atomic_int writes_since_start(0);
 }
 
 
@@ -221,6 +224,7 @@ namespace {
         }
         //std::cout << "Write on connection  '" << s_connections[conn_id].connection->GetName() << "', handle 0x" << 
         //    std::hex << handle << std::dec << " complete with status code " << std::hex << status << std::dec << std::endl;
+        //std::cout << "!!!~DEBUG~!!! writes completed since program start: " << ++writes_since_start << std::endl;
         s_connections[conn_id].available = true;
     }
 
@@ -246,6 +250,8 @@ namespace {
         if (!p_data) {
             std::cerr << __func__ << ": no data recieved!" << std::endl;
         } else {
+                std::cout << __func__ << ": recieved " << 
+                    std::string(reinterpret_cast<char*>(p_data->value.value), p_data->value.len) << std::endl;
             if (s_connections[conn_id].read_cb) {
                 s_connections[conn_id].read_cb(reinterpret_cast<char*>(p_data->value.value), p_data->value.len);
                 s_connections[conn_id].read_cb = nullptr; // clear callback
@@ -630,7 +636,7 @@ int RivieraGattClient::Connection::WriteCharacteristic(RivieraBT::UUID uuid, std
     if (type == RivieraGattClient::Connection::WriteType::COMMAND) {
         type_numeric = 1;
     } else if (type = RivieraGattClient::Connection::WriteType::REQUEST) {
-	type_numeric = 2;
+	    type_numeric = 2;
     } else {
         std::cerr << __func__ << ": Unavailable write type!" << std::endl;
         return -1;

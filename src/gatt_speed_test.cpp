@@ -1,6 +1,7 @@
 
 // C headers
 #include <string.h>  // for strncmp
+#include <unistd.h>  // for sleep
 
 // C++ Headers
 #include <chrono>
@@ -35,8 +36,8 @@ namespace { // put most of this in an anonymous namespace
         0xc6, 0x40, 0x1f, 0x84, 0x9e, 0x1b, 0xf9, 0x77
     };
     const RivieraBT::UUID WRITE_REQUEST_COUNT = {
-        0x7e, 0xfd, 0xc1, 0x64, 0x8c, 0xfc, 0xb1, 0x8c, 
-        0xc6, 0x40, 0x1f, 0x84, 0x9e, 0x1b, 0xf9, 0x77
+        0xe3, 0x09, 0x8d, 0xe4, 0x2a, 0xb8, 0x03, 0x90, 
+        0x4d, 0x4a, 0xb1, 0x0c, 0x22, 0xdb, 0x9b, 0xe9
     };
 
     // Connection metrics
@@ -254,12 +255,15 @@ void GattWriteSpeedTest(std::vector<std::string> device_names)
                 write_confirm_uuid = WRITE_REQUEST_COUNT;
             } else if (write_type == static_cast<int>(GattWriteType::COMMAND)) {
                 write_uuid = READ_N_WRITE_COMMAND;
-                write_confirm_uuid = READ_N_WRITE_COMMAND;
+                write_confirm_uuid = WRITE_COMMAND_COUNT;
             } else {
                 std::cerr << "This write type not supported by GATT speed write test! Skipping..." << std::endl;
                 continue;
             }
-    
+
+            const unsigned int NUMBER_OF_WRITES = 100;
+            // TODO: Uncomment
+            
             // Write & read
             std::cout << "-------------------------------------------------------------"  << std::endl;
             std::cout << "Checking that writes will go through..." << std::endl;
@@ -271,13 +275,19 @@ void GattWriteSpeedTest(std::vector<std::string> device_names)
             }
             std::cout << "Looks writable. Proceeding to write spam..." << std::endl;
 
+            // Zero out write counter characteristic
+            char zeroes[sizeof(uint32_t)] = {0};
+            connection->WriteCharacteristicWhenAvailable(write_confirm_uuid, std::string(zeroes, sizeof(uint32_t)), RivieraGattClient::Connection::WriteType::REQUEST);
+            
             // Write spam
-            const unsigned int NUMBER_OF_WRITES = 100;
+            //const unsigned int NUMBER_OF_WRITES = 100;
             std::cout << "-------------------------------------------------------------"  << std::endl;
             write_spam(connection, write_uuid, static_cast<GattWriteType>(write_type), actual_msg_size, NUMBER_OF_WRITES);
             
+            
             // Read back successful connections
             // TODO: I really need to just add timeouts to all functions to make WaitForAvailable implicit
+            sleep(1); // TODO: so fugly
             connection->WaitForAvailable();
             std::string successful_writes_str = connection->ReadCharacteristic(write_confirm_uuid);
             if (successful_writes_str.length() == 0) {
@@ -288,7 +298,8 @@ void GattWriteSpeedTest(std::vector<std::string> device_names)
             for (int i=0; i<successful_writes_str.length(); ++i) {
                 successful_writes += successful_writes_str.c_str()[i] << (i*8);
             }
-            std::cout << successful_writes_str << " of the " << NUMBER_OF_WRITES << " writes were succcessful" << std::endl;
+            std::cout << static_cast<int>(successful_writes) << " of the " << NUMBER_OF_WRITES << " writes were succcessful" << std::endl;
+        
         }
     }
 }
