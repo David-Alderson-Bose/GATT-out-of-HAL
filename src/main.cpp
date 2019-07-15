@@ -96,7 +96,7 @@ int main(int argc, char **argv)
 
 
     // All under one umbrella now
-    GattWriteSpeedTest(std::vector<std::string>({/*LEFT_BUD, */ RIGHT_BUD,}));
+    GattWriteSpeedTest(std::vector<std::string>({LEFT_BUD, /* RIGHT_BUD,*/}));
 
 
     // So long suckers!

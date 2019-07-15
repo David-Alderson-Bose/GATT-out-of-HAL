@@ -142,6 +142,8 @@ int write_spam(RivieraGattClient::ConnectionPtr connection,
     // Time the writes
     std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
     for (int rounds=0;rounds<writes;++rounds) {
+        // TODO: should we wait for congestion?
+        connection->WaitForUncongested();
         connection->WriteCharacteristicWhenAvailable(uuid, test_str, type);
     }
     std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
@@ -230,6 +232,15 @@ void GattWriteSpeedTest(std::vector<std::string> device_names)
             continue;
         }
 
+        // TODO: For testing with JEFF
+        const int KILLTIME(35);
+        std::cout << "~~~~~~~!!!!!!!!!!!!!!! Waiting " << KILLTIME << " seconds" << std::endl;
+        for (int i=0;i<KILLTIME;++i) {
+            sleep(1);
+            std::cout << i << std::endl; 
+        }
+
+
         // Increase MTU & get connection details
         connection->SetMTU(READ_N_WRITE_MTU);
         connection->WaitForAvailable();
@@ -291,7 +302,7 @@ void GattWriteSpeedTest(std::vector<std::string> device_names)
             connection->WaitForAvailable();
             std::string successful_writes_str = connection->ReadCharacteristic(write_confirm_uuid);
             if (successful_writes_str.length() == 0) {
-                std::cerr << "Couldn't read number of successful write! Something went wrong..." << std::endl;
+                std::cerr << "Couldn't read number of successful writes! Something went wrong..." << std::endl;
                 continue;
             }
             unsigned int successful_writes(0);
@@ -299,8 +310,9 @@ void GattWriteSpeedTest(std::vector<std::string> device_names)
                 successful_writes += successful_writes_str.c_str()[i] << (i*8);
             }
             std::cout << static_cast<int>(successful_writes) << " of the " << NUMBER_OF_WRITES << " writes were succcessful" << std::endl;
-        
         }
+
+
     }
 }
 

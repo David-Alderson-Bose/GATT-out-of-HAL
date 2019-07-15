@@ -50,6 +50,10 @@ namespace RivieraGattClient {
          */
         int WaitForAvailable(unsigned int timeout = 0);
 
+        // TODO: Congestion function documentation
+        bool IsCongested();
+        int WaitForUncongested(unsigned int timeout = 0);
+
         // X Macro to generate write types
         // https://en.wikipedia.org/wiki/X_macro
         #define WRITE_TYPES \

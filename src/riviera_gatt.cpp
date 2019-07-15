@@ -43,8 +43,10 @@ struct ConnectionData {
         RivieraGattClient::ReadCallback read_cb;
         std::map<RivieraBT::UUID, int> handles;
         unsigned int mtu;
+        std::atomic_bool congested;
         ConnectionData() : available(false), handles_db(nullptr), handles_count(-1), 
-                           connection(nullptr), read_cb(nullptr), mtu(DEFAULT_MTU) {}
+                           connection(nullptr), read_cb(nullptr), mtu(DEFAULT_MTU),
+                           congested(false) {}
     };
 
 // Anonymous namespace for data storage
@@ -293,6 +295,12 @@ namespace {
     }
 
 
+    void congestion_callback(int conn_id, bool congested) {
+        std::cerr << "!!!!!! Connection " << s_connections[conn_id].connection->GetName() << " (id " << conn_id << ") has congestion status: " << congested << std::endl;
+        s_connections[conn_id].congested = congested;
+    }
+
+
 
 
     btgatt_client_callbacks_t sBTGATTClientCallbacks = {
@@ -318,7 +326,7 @@ namespace {
         NULL, // multi_adv_update_callback
         NULL, // multi_adv_data_callback
         NULL, // multi_adv_disable_callback
-        NULL, // congestion_callback
+        congestion_callback,
         NULL, // batchscan_cfg_storage_callback
         NULL, // batchscan_enable_disable_callback
         NULL, // batchscan_reports_callback
@@ -474,6 +482,9 @@ std::string RivieraGattClient::Connection::GetName() {
     return m_name;
 }
 
+
+
+
  
 RivieraGattClient::Connection::Connection(std::string name, int conn_id, bt_bdaddr_t* bda, ConnectionData* data)
     : m_name(name)
@@ -600,6 +611,20 @@ int RivieraGattClient::Connection::WaitForAvailable(unsigned int timeout)
 }
 
 
+bool RivieraGattClient::Connection::IsCongested()
+{
+    return m_data->congested;
+}
+
+
+
+int RivieraGattClient::Connection::WaitForUncongested(unsigned int timeout)
+{
+    // TODO: This is a hack, add a timeout or something
+    while (IsCongested());
+    return 0;
+}
+
         
 #undef WRITE_TYPE
 #define WRITE_TYPE(x) #x, 
@@ -658,6 +683,9 @@ int RivieraGattClient::Connection::WriteCharacteristic(RivieraBT::UUID uuid, std
     //    std::hex << static_cast<int>(handle) << std::dec << ". Waiting for response..." << std::endl;
     return 0;
 }
+
+
+
 
 
 std::string RivieraGattClient::Connection::ReadCharacteristic(RivieraBT::UUID uuid)
