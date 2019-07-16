@@ -9,6 +9,7 @@
 #include <map>
 #include <algorithm> // for equal
 #include <iterator>
+#include <chrono>
 
 #include <string.h> // for strerror()
 #include <errno.h> // for errno
@@ -45,9 +46,14 @@ struct ConnectionData {
         unsigned int mtu;
         std::atomic_bool congested;
         std::atomic_bool resend_needed;
+        std::atomic_int times_congested;
+        std::chrono::steady_clock::time_point last_congestion;
+        std::chrono::duration<int, std::milli> congestion_duration;
         ConnectionData() : available(false), handles_db(nullptr), handles_count(-1), 
                            connection(nullptr), read_cb(nullptr), mtu(DEFAULT_MTU),
-                           congested(false), resend_needed(false) {}
+                           congested(false), times_congested(0), last_congestion(0),
+                           congestion_duration(0)
+                            {}
     };
 
 // Anonymous namespace for data storage
@@ -195,7 +201,7 @@ namespace {
 
 
     void DisconnectClientCallback(int conn_id, int status, int client_if, bt_bdaddr_t* bda) {
-        std::cout << "D_I_S_C_O_N_N_E_C_T_E_D, client_if:" << client_if << ", conn_id:" << conn_id << ", uuid:0x";
+        std::cout << "D_I_S_C_O_N_N_E_C_T_E_D, client_if:" << client_if << ", conn_id:" << std::dec << conn_id << ", uuid:0x";
         for (int i = 0; i < UUID_BYTES_LEN; i++) {
             std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(bda->address[i]);
         }
@@ -211,9 +217,12 @@ namespace {
 
     void get_gatt_db_callback(int conn_id, btgatt_db_element_t* db, int count) {
         if (s_connections.count(conn_id) > 0) {
+            std::cout << "!~! DEBUG !~! Conn id " << conn_id << " got GATT db callback with " << count << " handles " << std::endl; 
             s_connections[conn_id].handles_db.reset(db);
             s_connections[conn_id].handles_count = count;
             s_connections[conn_id].available = true;
+        } else {
+            std::cerr << "GATT db ball back for " << conn_id << " which is not registered!" << std::endl;
         }
     }
 
@@ -303,9 +312,14 @@ namespace {
 
     void congestion_callback(int conn_id, bool congested) {
         //std::cerr << "!!!!!! Connection " << s_connections[conn_id].connection->GetName() << " (id " << conn_id << ") has congestion status: " << congested << std::endl;
-        //if (congested) {
+        if (congested) {
+            s_connections[conn_id].times_congested++;
+            s_connections[conn_id].last_congestion = std::chrono::steady_clock::now();
         //    std::cerr << "   writes attempted: " << s_write_attempts_since_start << "   write completed " << s_writes_complete_since_start << std::endl;
-        //}
+        } else {
+            auto now = std::chrono::steady_clock::now();
+            s_connections[conn_id].congestion_duration += std::chrono::duration_cast<std::chrono::milliseconds>(now - s_connections[conn_id].last_congestion).count();
+        }
         s_connections[conn_id].congested = congested;
     }
 
@@ -455,7 +469,7 @@ RivieraGattClient::ConnectionPtr RivieraGattClient::Connect(std::string name, bo
     s_name_to_scan = name; 
     s_scanning = true;
     s_gatt_client_interface->scan(true);
-    while (s_scanning);
+    while (s_scanning); // wait for scan to complete
 
     // Connect if possible
     if (!s_bda) {
@@ -534,19 +548,19 @@ void RivieraGattClient::Connection::fill_handle_map()
 
 void RivieraGattClient::Connection::fetch_services(void) 
 {
-    std::cout << "Searching for services on " << m_name << " conn_id " << std::dec << m_conn_id << std::endl;
-    //m_data->available = false;
-    //s_gatt_client_interface->search_service(s_client_if, nullptr); // Need to do this before get_gatt_db will work
-    //std::cout << std::dec << __FILE__ << "/" <<  __func__ << __LINE__ << " TRACKING!!!" << std::endl;
-    //while (!m_data->available);
-    //std::cout << std::dec << __FILE__ << "/" <<  __func__ << __LINE__ << " TRACKING!!!" << std::endl;
-    
     std::cout << "Fetching gatt database..." << std::endl;
-    m_data->available = false;
-    s_gatt_client_interface->get_gatt_db(s_conn_id); // Need to do search_services before this will work
-    //std::cout << std::dec << __FILE__ << "/" <<  __func__ << " " << __LINE__ << " TRACKING!!!" << std::endl;
-    while(!m_data->available);
-    //std::cout << std::dec << __FILE__ << "/" <<  __func__ << " " << __LINE__ << " TRACKING!!!" << std::endl;
+
+    for (int retries=0; retries<10; ++retries) { // TODO: better retry logic
+        m_data->available = false;
+        s_gatt_client_interface->get_gatt_db(m_conn_id);
+        while(!m_data->available);
+        if (m_data->handles_count > 0) {
+            break;
+        } else {
+            std::cerr << "Got no handles from handle search! Trying again..." << std::endl;
+            sleep(1);
+        }
+    }
 
     fill_handle_map();
     std::cout << "Finished attempt to fill handle map" << std::endl;

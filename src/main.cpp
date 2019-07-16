@@ -86,18 +86,15 @@ int main(int argc, char **argv)
     }
     std::cout << "Max priority set!" << std::endl;
     
-    
     // What's this?? A BLUETOOTH CALLLLL?????? :-O
     if (0 != RivieraBT::Setup()) {
         std::cout << "No BT for you today!" << std::endl;
-        exit(1);
+        return -1;
     }
     std::cout << "Android HAL BT setup complete" << std::endl;
 
-
-    // All under one umbrella now
-    GattWriteSpeedTest(std::vector<std::string>({LEFT_BUD, /* RIGHT_BUD,*/}));
-
+    // TESTS
+    GattWriteSpeedTests::CommandPair(std::vector<std::string>({RIGHT_BUD,LEFT_BUD,}));
 
     // So long suckers!
     std::cout << std::endl << std::endl;
@@ -107,175 +104,3 @@ int main(int argc, char **argv)
 }
 
 
-
-
-
-
-/*
-static int g_accel_readings[ACCEL_READINGS_SIZE] = {0};
-std::mutex g_readings_mutex; // This is gonna be callback'd a lot of places, so...
-void update_accel_readings(size_t loc, char* buf, size_t len, std::string name=std::string(""))
-{
-    if (loc%2 != 0) {
-        std::cerr << __func__ << ": Only even addresses allowed!" << std::endl;
-        return;
-    } 
-    if (loc+len > ACCEL_READINGS_SIZE) {
-        std::cerr << __func__ << ": Data too long for address!" << std::endl;
-        return;
-    }
-    if (len > 2) {
-        std::cerr << __func__ << ": Too much data!" << std::endl;
-        return;
-    }
-
-    // auto-unlocks once out of scope
-    std::lock_guard<std::mutex> lock(g_readings_mutex); 
-
-    // Data comes in reversed
-    for (int i=0; i<len; ++i) {
-        g_accel_readings[loc+len-1-i] = static_cast<int>(buf[i]);
-    }
-}
-
-
-
-
-
-void read_accel_data(RivieraGattClient::ConnectionPtr bud, RivieraBT::UUID axis_uuid, size_t position, std::string name=std::string(""))
-{
-    if (!bud) {
-        std::cerr << __func__ << ": need a valid connection!" << std::endl;
-        return;
-    }
-
-    RivieraGattClient::ReadCallback read_cb = [position, name] (char* buf, size_t len) {
-        update_accel_readings(position, buf, len, name);
-    };
-    if (0 != bud->ReadCharacteristic(axis_uuid, read_cb)) {
-        std::cerr << __func__ << ": Couldn't read!" << std::endl;
-    }
-}
-
-
-std::string format_accel_readings()
-{
-    std::ostringstream oss;
-    g_readings_mutex.lock();
-    for (int i=0; i<ACCEL_READINGS_SIZE; ++i) {
-        oss << std::uppercase << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(g_accel_readings[i]);
-    }
-    g_readings_mutex.unlock();
-    return oss.str();
-}
-
-
-
-
-int main(int argc, char **argv)
-{
-    // Printing PID makes it easier to send SIGTERM
-    std::cout << "Process ID: " << getpid() << std::endl;
-    
-    // What's this?? A BLUETOOTH CALLLLL?????? :-O
-    if (0 != RivieraBT::Setup()) {
-        std::cout << "No BT for you today!" << std::endl;
-        exit(1);
-    }
-    std::cout << "Android HAL BT setup complete" << std::endl;
-
-    // Connect to left bud
-    RivieraGattClient::ConnectionPtr left_bud = RivieraGattClient::Connect(LEFT_BUD);
-    if (left_bud == nullptr) {
-        std::cerr << __func__ << ": Could not connect to " << LEFT_BUD << "!" << std::endl;
-        RivieraBT::Shutdown();
-        return -1;
-    }
-    sleep(5); // argh so busted
-    
-    // Connect to Right bud
-    RivieraGattClient::ConnectionPtr right_bud = RivieraGattClient::Connect(RIGHT_BUD);
-    if (right_bud == nullptr) {
-        std::cerr << __func__ << ": Could not connect to " << RIGHT_BUD << "!" << std::endl;
-        RivieraBT::Shutdown();
-        return -2;
-    }
-    sleep(5); // argh so busted
-
-   // Set up signal handling before main loop starts
-    signal(SIGINT, signal_handler);
-
-    // Main loop
-    int count(0);
-    std::cout << "Beginning read loop..." << std::endl;
-    while (sig_caught == 0) {
-        // Left accel data
-        read_accel_data(left_bud, BUD_X_AXIS, 0);
-        read_accel_data(left_bud, BUD_Y_AXIS, 2);
-        read_accel_data(left_bud, BUD_Z_AXIS, 4);
-        
-
-        // Right accel data
-        read_accel_data(right_bud, BUD_X_AXIS, 6);
-        read_accel_data(right_bud, BUD_Y_AXIS, 8);
-        read_accel_data(right_bud, BUD_Z_AXIS, 10);
-    
-        // WEBSOCKIT TO ME
-        std::cout << "Round " << ++count << ": sending accel data " << format_accel_readings() << std::endl;
-        //respondo.Respond(1000);
-        sleep(1);
-    }
-
-
-
-    // So long suckers!
-    RivieraBT::Shutdown();
-    std::cout << "bye bye!" << std::endl;
-    return 0;
-}
-*/
-
-
-
-
-
-
-
-
-
-/*
-void read_loop(std::string name, RivieraBT::UUID uuid) 
-{
-    RivieraGattClient::ConnectionPtr read_only = RivieraGattClient::Connect(name);
-    if (read_only == nullptr) {
-        std::cerr << __func__ << ": Could not connect to " << name << "!" << std::endl;
-        return;
-    }
-    std::cout << "Beginning read loop..." << std::endl;
-
-    std::string recv_str;
-    std::atomic_bool read_done(false);
-    RivieraGattClient::ReadCallback read_cb = [&] (char* buf, size_t len) {
-        std::ostringstream oss;
-        for (int i=len-1; i>=0; --i) {
-            oss << std::uppercase << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(buf[i]);
-        }
-        recv_str = oss.str(); 
-        read_done = true;
-    };
-    
-    int count(0);
-    while (sig_caught == 0) {        
-        sleep(1);
-        std::cout << "Round " << count++ << ": ";
-        read_done = false;
-        if (0 != read_only->ReadCharacteristic(uuid, read_cb)) {
-            std::cout << "I read nuffin :-(" << std::endl;
-            continue;
-        }
-         
-        while (!read_done); // wait around
-        std:: cout << "got string '" << recv_str << "'" << std::endl;
-    } 
-}
-*/

@@ -8,13 +8,18 @@
 #include <iostream>
 #include <map>
 #include <vector>
+#include <thread>
 #include <atomic>
 
 #include <riviera_bt.hpp>
 #include <riviera_gatt_client.hpp>
+#include <gatt_speed_test.hpp>
 
 
 namespace { // put most of this in an anonymous namespace
+
+    // For convenience
+    using ConnectionPtrVector = std::vector<RivieraGattClient::ConnectionPtr>;
 
     // TODO: Centralize these
     const std::string LEFT_BUD("Rubeus_accel_demo_L");
@@ -126,7 +131,7 @@ int write_n_readback(RivieraGattClient::ConnectionPtr connection,
 
 int write_spam(RivieraGattClient::ConnectionPtr connection, 
                RivieraBT::UUID uuid, 
-               RivieraGattClient::Connection::WriteType type, 
+               RivieraGattClient::Connection::WriteType type = RivieraGattClient::Connection::WriteType::COMMAND, 
                unsigned int len=READ_N_WRITE_MSG_SIZE, 
                unsigned int writes=100)
 {
@@ -137,7 +142,7 @@ int write_spam(RivieraGattClient::ConnectionPtr connection,
 
     // Prep
     std::string test_str = random_digits(len); 
-    std::cout << "Testing write spam with randomly generated string: " << test_str << std::endl;
+    std::cout << std::dec << "Testing write spam on " << connection->GetName() << " with randomly generated string " << len << " chars long" << std::endl;
     
     // Time the writes
     std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
@@ -153,7 +158,7 @@ int write_spam(RivieraGattClient::ConnectionPtr connection,
     float duration_s = static_cast<float>(duration_ms) / 1000.0;
     unsigned int total_bytes = len * writes;
     float bytes_per_mSec = static_cast<float>(total_bytes) / static_cast<float>(duration_ms); 
-    std::cout << "Took " << duration_s << "seconds to write " << len << " bytes " << writes << " times (so " << 
+    std::cout << "Took " << duration_s << "seconds to write " << len << " bytes " << writes << " times on " << connection->GetName() << " (so " << 
         total_bytes << " bytes total). So " << bytes_per_mSec << " bytes/millisecond." << std::endl;
     return 0;
 }
@@ -192,15 +197,177 @@ int get_connection_metrics(RivieraGattClient::ConnectionPtr connection, metrics_
 
 
 
+/**
+ * Produces connections from names
+ * @param device_names: names of devices to connect to
+ * @return: vector of connections of equal length of names vector. On failure, will be smaller in length.
+ */ 
+ConnectionPtrVector connect_all(std::vector<std::string> device_names)
+{
+    // Prepare connection vector
+    ConnectionPtrVector connections;
+
+    // Iterate over device names
+    for (auto& device_name: device_names) {
+        connections.push_back(RivieraGattClient::Connect(device_name));
+        if (connections.back() == nullptr) {
+            std::cerr << "Could not connect to " << device_name << "!" << std::endl;
+            break;
+        }
+        sleep(5); // Ugly but let's not wail on the BT stack
+    }
+
+    return connections;
+}
+
+
+/**
+ * Prepares for write tests
+ * @param connections: vector of connections. Must NOT contain any nullptrs.
+ * @return: Zero on success, non-zero on failure.
+ */ 
+int pre_test(ConnectionPtrVector connections, unsigned int new_MTU = READ_N_WRITE_MTU)
+{
+    metrics_list connection_metrics = {
+        {"PDU for reads", PDU_ON_READ},
+        {"PDU for writes", PDU_ON_WRITE},
+        {"MTU for connection",CONNECTION_MTU},
+        {CONNECTION_INTERVAL_NAME, CONNECTION_INVERVAL},
+    };
+
+    for (auto& connection: connections) {
+        if (!connection) {
+            std::cerr << "Nullptr found instead of connection!" << std::endl;
+            return -1;
+        }
+        std::cout << "Preparing " << connection->GetName() << " for test..." << std::endl;
+
+        // Increase MTU & get connection details
+        connection->SetMTU(new_MTU);
+        connection->WaitForAvailable();
+        unsigned int actual_mtu = connection->GetMTU();
+        if (new_MTU != actual_mtu) {
+            std::cerr << "MTU on device " << connection->GetName() << " is " << actual_mtu << 
+                " instead of desierved " << new_MTU << "!" << std::endl;
+            return -1;
+        }
+        get_connection_metrics(connection, connection_metrics);
+    }
+    return 0;
+}
+
+
+RivieraBT::UUID get_writes_count_uuid_from_write_type(RivieraGattClient::Connection::WriteType type)
+{
+    RivieraBT::UUID uuid;
+    if (type == RivieraGattClient::Connection::WriteType::COMMAND) {
+        uuid = WRITE_COMMAND_COUNT;
+    } else if (type == RivieraGattClient::Connection::WriteType::REQUEST) {
+        uuid = WRITE_REQUEST_COUNT;
+    } else {
+        std::cerr << __func__ << ": got unsupported write type" << std::endl;
+        // TODO: This should really throw an exception
+    }
+    return uuid; 
+}
+
+
+
+int get_successful_writes(RivieraGattClient::ConnectionPtr connection, RivieraGattClient::Connection::WriteType type)
+{
+    if (!connection) {
+        std::cerr << __func__ << ": connection is nullptr!" << std::endl;
+    }
+    
+    RivieraBT::UUID uuid = get_writes_count_uuid_from_write_type(type);
+
+    connection->WaitForAvailable();
+    std::string successful_writes_str = connection->ReadCharacteristic(uuid);
+    if (successful_writes_str.length() == 0) {
+        std::cerr << "Couldn't read number of successful writes on " << connection->GetName() << " ! Something went wrong..." << std::endl;
+        return -1;
+    }
+    unsigned int successful_writes(0);
+    for (int i=0; i<successful_writes_str.length(); ++i) {
+        successful_writes += successful_writes_str.c_str()[i] << (i*8);
+    }
+    std::cout << static_cast<int>(successful_writes) << " successful writes on " << connection->GetName() << std::endl;
+    return 0;
+}
+
+
+int clear_successful_writes(RivieraGattClient::ConnectionPtr connection, RivieraGattClient::Connection::WriteType type)
+{
+    if (!connection) {
+        std::cerr << __func__ << ": connection is nullptr!" << std::endl;
+        return -1;
+    }
+    
+    RivieraBT::UUID uuid = get_writes_count_uuid_from_write_type(type);
+
+    // Zero out write counter characteristic
+    char zeroes[sizeof(uint32_t)] = {0};
+    connection->WriteCharacteristicWhenAvailable(uuid, std::string(zeroes, sizeof(uint32_t)), RivieraGattClient::Connection::WriteType::REQUEST);
+
+    return 0;
+}    
+          
+
+
+
 } // End anonymous namespace
 
 
+void GattWriteSpeedTests::CommandPair(std::vector<std::string> device_names, unsigned int number_of_writes) 
+{
+    if (device_names.size() != 2) {
+        std::cerr << __func__ << " requires exactly TWO devices!!" << std::endl;
+        return;
+    }
+
+    ConnectionPtrVector connections = connect_all(device_names);
+    if (connections.size() != device_names.size()) {
+        std::cerr << "Could not connect to all devices!" << std::endl;
+        return;
+    }
+
+    // TODO: Some of the connection-start code sets std::hex somewhere, clean that up
+    std::cout << std::dec;
+
+    if (pre_test(connections) != 0) {
+        std::cerr << "Could not set up all devices!" << std::endl;
+        return;
+    }
+
+    // TODO: Perform write & readback?
+
+    // Clear write counts
+    for (auto& connection: connections) {
+        clear_successful_writes(connection, RivieraGattClient::Connection::WriteType::COMMAND);
+    }
+
+    // Spam in threads & wait for em to join
+    std::vector<std::thread> write_threads;
+    for (auto& connection: connections) {
+        // Using a lambda cuz I want to use default params!!! 🤘
+        write_threads.push_back(std::thread([&]{write_spam(connection, READ_N_WRITE_COMMAND);}));
+    }
+    for (auto& write_thread: write_threads) {
+        write_thread.join();
+    }
+
+    // Get write counts
+    sleep(1); // TODO: so fugly
+    for (auto& connection: connections) {
+        get_successful_writes(connection, RivieraGattClient::Connection::WriteType::COMMAND);
+    }
+}
 
 
 
 
 
-void GattWriteSpeedTest(std::vector<std::string> device_names) 
+void GattWriteSpeedTests::CommandVsRequest(std::vector<std::string> device_names, unsigned int number_of_writes) 
 {
     // Extra metrics
     metrics_list connection_metrics = {
@@ -210,17 +377,6 @@ void GattWriteSpeedTest(std::vector<std::string> device_names)
         {CONNECTION_INTERVAL_NAME, CONNECTION_INVERVAL},
     };
 
-    // Test containers
-    // TODO: tuple is kinda ugly, maybe make a full on testing struct
-    /*
-    std::vector<std::tuple<std::string, RivieraGattClient::ConnectionPtr, RivieraGattClient::Connection::WriteType, RivieraBT::UUID>> devices = {
-        std::make_tuple(LEFT_BUD,  nullptr,  RivieraGattClient::Connection::WriteType::REQUEST, READ_N_WRITE_REQUEST),
-        std::make_tuple(LEFT_BUD,  nullptr,  RivieraGattClient::Connection::WriteType::COMMAND, READ_N_WRITE_COMMAND),
-        std::make_tuple(RIGHT_BUD, nullptr,  RivieraGattClient::Connection::WriteType::REQUEST, READ_N_WRITE_REQUEST),
-        std::make_tuple(RIGHT_BUD, nullptr,  RivieraGattClient::Connection::WriteType::COMMAND, READ_N_WRITE_COMMAND),
-    };
-    */
-    
     // Iterate over device names
     for (auto& device_name: device_names) {
         std::cout << std::endl << std::endl;
@@ -231,16 +387,6 @@ void GattWriteSpeedTest(std::vector<std::string> device_names)
             std::cerr << "Could not connect to " << device_name << "!" << std::endl;
             continue;
         }
-
-        // TODO: For testing with JEFF
-        /*
-        const int KILLTIME(35);
-        std::cout << "~~~~~~~!!!!!!!!!!!!!!! Waiting " << KILLTIME << " seconds" << std::endl;
-        for (int i=0;i<KILLTIME;++i) {
-            sleep(1);
-            std::cout << i << std::endl; 
-        }
-        */
 
         // Increase MTU & get connection details
         connection->SetMTU(READ_N_WRITE_MTU);
@@ -318,56 +464,5 @@ void GattWriteSpeedTest(std::vector<std::string> device_names)
 }
 
 
-    /*
-    // Test loops
-    for (auto& device : devices) {
-        std::cout << std::endl << std::endl;
-        std::cout << "************************************************" << std::endl;
-
-        // Connect
-        std::get<1>(device) = RivieraGattClient::Connect(std::get<0>(device));
-        if (std::get<1>(device) == nullptr) {
-            std::cerr << "Could not connect to " << std::get<0>(device) << "!" << std::endl;
-            continue;
-        }
-
-        // Increase MTU
-        std::get<1>(device)->SetMTU(READ_N_WRITE_MTU);
-        std::get<1>(device)->WaitForAvailable();
-        unsigned int actual_mtu = std::get<1>(device)->GetMTU();
-        if (READ_N_WRITE_MTU != actual_mtu) {
-            std::cerr << "MTU on device " << std::get<0>(device) << " is " << actual_mtu << 
-                " instead of desierved " << READ_N_WRITE_MTU << "!" << std::endl;
-        }
-        unsigned int actual_msg_size = actual_mtu-HEADER_SIZE;
 
 
-        get_connection_metrics(std::get<1>(device), connection_metrics);
-
-        
-        // Confirm write type        
-        if (std::get<2>(device) == RivieraGattClient::Connection::WriteType::REQUEST) {
-            std::cout << "This test is for write-REQUEST!" << std::endl;
-        } else if (std::get<2>(device) == RivieraGattClient::Connection::WriteType::COMMAND) {
-            std::cout << "This test is for write-COMMAND!" << std::endl;
-        } else {
-            std::cerr << "Hey you tried to slide a bad write type by me you jerk!" <<
-                " I'm gonna skip this test for that." << std::endl;
-            continue;
-        }
-
-        // Write & read
-        std::cout << "Checking that writes will go through..." << std::endl;
-        int incorrect_digits = write_n_readback(std::get<1>(device), std::get<3>(device), std::get<2>(device), actual_msg_size);
-        std::cout << "Write & read numeric result: " << incorrect_digits << std::endl;
-        if (incorrect_digits != 0) {
-            std::cerr << "Non-zero result. That's no good! Check the characteristic and try again, please!" << std::endl;
-            continue;
-        }
-        std::cout << "Looks writable. Proceeding to write spam..." << std::endl;
-
-        // Write spam
-        write_spam(std::get<1>(device), std::get<3>(device), std::get<2>(device), actual_msg_size, 100);
-    }
-}
-*/
