@@ -10,6 +10,7 @@
 #include <vector>
 #include <thread>
 #include <atomic>
+#include <mutex>
 
 #include <riviera_bt.hpp>
 #include <riviera_gatt_client.hpp>
@@ -141,6 +142,7 @@ int write_spam(RivieraGattClient::ConnectionPtr connection,
     }
 
     // Prep
+    std::mutex print_mutex;
     std::string test_str = random_digits(len); 
     std::cout << std::dec << "Testing write spam on " << connection->GetName() << " with randomly generated string " << len << " chars long" << std::endl;
     
@@ -158,8 +160,11 @@ int write_spam(RivieraGattClient::ConnectionPtr connection,
     float duration_s = static_cast<float>(duration_ms) / 1000.0;
     unsigned int total_bytes = len * writes;
     float bytes_per_mSec = static_cast<float>(total_bytes) / static_cast<float>(duration_ms); 
+    std::lock_guard<std::mutex> locdk(print_mutex); // unlocks at end of scope
     std::cout << "Took " << duration_s << "seconds to write " << len << " bytes " << writes << " times on " << connection->GetName() << " (so " << 
         total_bytes << " bytes total). So " << bytes_per_mSec << " bytes/millisecond." << std::endl;
+    std::cout << "There were " << connection->GetCongestions() << " points of congestion that caused " << 
+        connection->GetTimeSpentCongested() << "ms of delay in total" << std::endl;
     return 0;
 }
 
@@ -172,13 +177,16 @@ int write_spam(RivieraGattClient::ConnectionPtr connection,
  */ 
 int get_connection_metrics(RivieraGattClient::ConnectionPtr connection, metrics_list& metrics) {
     int error_count(0);
+    
     for (auto& metric: metrics) {
+        sleep(1);
         // TODO: I don't think I need the 'read done' flag so long as Available() works as expected...
         bool read_done(false);
         RivieraGattClient::ReadCallback read_cb = [&] (char* buf, size_t length) {
             unsigned int value(0);
-            //std::cout << "!!!!!!!!!!!!!!!!!!!!!!!!! got msg of length " << length << std::endl;
+            std::cout << "!!!!!!!!!!!!!!!!!!!!!!!!! got msg of length " << length << std::endl;
             for (int i=0;i<length; ++i) {
+                std::cout << "   " <<  std::hex << static_cast<int>(buf[i]) << std::dec << std::endl;
                 value += (buf[i] << (i*8)); // add bitshifted values
             }
             std::cout << "Metric " << metric.first << " value: " << value << std::endl;
@@ -187,6 +195,7 @@ int get_connection_metrics(RivieraGattClient::ConnectionPtr connection, metrics_
             }
             read_done = true;
         };
+        connection->WaitForUncongested();
         if (0 != connection->ReadCharacteristicWhenAvailable(metric.second, read_cb)) {
             std::cerr << __func__ << ": could not read UUID associated with metric " << metric.first << std::endl;
         }
@@ -214,7 +223,7 @@ ConnectionPtrVector connect_all(std::vector<std::string> device_names)
             std::cerr << "Could not connect to " << device_name << "!" << std::endl;
             break;
         }
-        sleep(5); // Ugly but let's not wail on the BT stack
+        sleep(4); // Ugly but let's not wail on the BT stack
     }
 
     return connections;
@@ -229,10 +238,10 @@ ConnectionPtrVector connect_all(std::vector<std::string> device_names)
 int pre_test(ConnectionPtrVector connections, unsigned int new_MTU = READ_N_WRITE_MTU)
 {
     metrics_list connection_metrics = {
-        {"PDU for reads", PDU_ON_READ},
-        {"PDU for writes", PDU_ON_WRITE},
         {"MTU for connection",CONNECTION_MTU},
         {CONNECTION_INTERVAL_NAME, CONNECTION_INVERVAL},
+        {"PDU for reads", PDU_ON_READ},
+        {"PDU for writes", PDU_ON_WRITE},
     };
 
     for (auto& connection: connections) {
@@ -339,6 +348,9 @@ void GattWriteSpeedTests::CommandPair(std::vector<std::string> device_names, uns
         return;
     }
 
+    // TODO: remove this
+    return;
+
     // TODO: Perform write & readback?
 
     // Clear write counts
@@ -350,7 +362,9 @@ void GattWriteSpeedTests::CommandPair(std::vector<std::string> device_names, uns
     std::vector<std::thread> write_threads;
     for (auto& connection: connections) {
         // Using a lambda cuz I want to use default params!!! 🤘
-        write_threads.push_back(std::thread([&]{write_spam(connection, READ_N_WRITE_COMMAND);}));
+        //write_threads.push_back(std::thread([&]{write_spam(connection, READ_N_WRITE_COMMAND);}));
+        // TODO: make write size dynamic
+        write_threads.push_back(std::thread(write_spam, connection, READ_N_WRITE_COMMAND, RivieraGattClient::Connection::WriteType::COMMAND, 252, number_of_writes));
     }
     for (auto& write_thread: write_threads) {
         write_thread.join();

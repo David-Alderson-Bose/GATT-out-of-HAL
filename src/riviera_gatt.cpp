@@ -48,12 +48,14 @@ struct ConnectionData {
         std::atomic_bool resend_needed;
         std::atomic_int times_congested;
         std::chrono::steady_clock::time_point last_congestion;
-        std::chrono::duration<int, std::milli> congestion_duration;
+        std::chrono::milliseconds congestion_duration;
         ConnectionData() : available(false), handles_db(nullptr), handles_count(-1), 
                            connection(nullptr), read_cb(nullptr), mtu(DEFAULT_MTU),
-                           congested(false), times_congested(0), last_congestion(0),
-                           congestion_duration(0)
-                            {}
+                           congested(false), times_congested(0), 
+                           congestion_duration(std::chrono::milliseconds::zero())
+            {
+                //congestion_duration = std::chrono::milliseconds::zero();
+            }
     };
 
 // Anonymous namespace for data storage
@@ -318,7 +320,7 @@ namespace {
         //    std::cerr << "   writes attempted: " << s_write_attempts_since_start << "   write completed " << s_writes_complete_since_start << std::endl;
         } else {
             auto now = std::chrono::steady_clock::now();
-            s_connections[conn_id].congestion_duration += std::chrono::duration_cast<std::chrono::milliseconds>(now - s_connections[conn_id].last_congestion).count();
+            s_connections[conn_id].congestion_duration += std::chrono::duration_cast<std::chrono::milliseconds>(now - s_connections[conn_id].last_congestion);
         }
         s_connections[conn_id].congested = congested;
     }
@@ -506,6 +508,16 @@ std::string RivieraGattClient::Connection::GetName() {
 }
 
 
+unsigned int RivieraGattClient::Connection::GetCongestions()
+{
+    return static_cast<unsigned int>(m_data->times_congested);
+}
+
+
+unsigned int RivieraGattClient::Connection::GetTimeSpentCongested()
+{
+    return static_cast<unsigned int>(m_data->congestion_duration.count());
+}
 
 
  

@@ -3,6 +3,7 @@
 #include <functional>
 #include <memory>
 
+
 #include <riviera_bt.hpp>
 
 
@@ -139,6 +140,16 @@ namespace RivieraGattClient {
          * TODO
          */ 
         void PrintHandles();
+
+        /**
+         * TODO
+         */
+        unsigned int GetCongestions();
+
+        /**
+         * TODO
+         */ 
+        unsigned int GetTimeSpentCongested(); 
 
     protected:
         Connection(std::string name, int conn_id, bt_bdaddr_t* bda, ConnectionData* data);

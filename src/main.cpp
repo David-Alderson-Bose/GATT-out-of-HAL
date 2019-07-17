@@ -94,7 +94,7 @@ int main(int argc, char **argv)
     std::cout << "Android HAL BT setup complete" << std::endl;
 
     // TESTS
-    GattWriteSpeedTests::CommandPair(std::vector<std::string>({RIGHT_BUD,LEFT_BUD,}));
+    GattWriteSpeedTests::CommandPair(std::vector<std::string>({RIGHT_BUD,LEFT_BUD,}), 100);
 
     // So long suckers!
     std::cout << std::endl << std::endl;
