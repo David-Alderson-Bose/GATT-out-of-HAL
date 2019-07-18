@@ -179,14 +179,11 @@ int get_connection_metrics(RivieraGattClient::ConnectionPtr connection, metrics_
     int error_count(0);
     
     for (auto& metric: metrics) {
-        sleep(1);
         // TODO: I don't think I need the 'read done' flag so long as Available() works as expected...
         bool read_done(false);
         RivieraGattClient::ReadCallback read_cb = [&] (char* buf, size_t length) {
             unsigned int value(0);
-            std::cout << "!!!!!!!!!!!!!!!!!!!!!!!!! got msg of length " << length << std::endl;
             for (int i=0;i<length; ++i) {
-                std::cout << "   " <<  std::hex << static_cast<int>(buf[i]) << std::dec << std::endl;
                 value += (buf[i] << (i*8)); // add bitshifted values
             }
             std::cout << "Metric " << metric.first << " value: " << value << std::endl;
@@ -347,9 +344,6 @@ void GattWriteSpeedTests::CommandPair(std::vector<std::string> device_names, uns
         std::cerr << "Could not set up all devices!" << std::endl;
         return;
     }
-
-    // TODO: remove this
-    return;
 
     // TODO: Perform write & readback?
 
