@@ -219,7 +219,7 @@ namespace {
 
     void get_gatt_db_callback(int conn_id, btgatt_db_element_t* db, int count) {
         if (s_connections.count(conn_id) > 0) {
-            std::cout << "!~! DEBUG !~! Conn id " << conn_id << " got GATT db callback with " << count << " handles " << std::endl; 
+            //std::cout << "!~! DEBUG !~! Conn id " << conn_id << " got GATT db callback with " << count << " handles " << std::endl; 
             s_connections[conn_id].handles_db.reset(db);
             s_connections[conn_id].handles_count = count;
             s_connections[conn_id].available = true;
@@ -548,7 +548,7 @@ void RivieraGattClient::Connection::fill_handle_map()
         if (m_data->handles_db.get()[entry].type != BTGATT_DB_CHARACTERISTIC) {
             continue;
         }
-        std::cout << "  Adding entry for " << m_data->handles_db.get()[entry].attribute_handle << std::endl;
+        //std::cout << "  Adding entry for " << m_data->handles_db.get()[entry].attribute_handle << std::endl;
         RivieraBT::UUID uuid;
         memcpy(uuid.data(), m_data->handles_db.get()[entry].uuid.uu, UUID_BYTES_LEN);
         m_data->handles[uuid] = m_data->handles_db.get()[entry].attribute_handle;
@@ -576,7 +576,7 @@ void RivieraGattClient::Connection::fetch_services(void)
 
     fill_handle_map();
     std::cout << "Finished attempt to fill handle map" << std::endl;
-    PrintHandles();
+    //PrintHandles();
 }
 
 /**

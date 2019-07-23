@@ -220,7 +220,7 @@ ConnectionPtrVector connect_all(std::vector<std::string> device_names)
             std::cerr << "Could not connect to " << device_name << "!" << std::endl;
             break;
         }
-        sleep(4); // Ugly but let's not wail on the BT stack
+        sleep(3); // Ugly but let's not wail on the BT stack
     }
 
     return connections;
@@ -316,7 +316,58 @@ int clear_successful_writes(RivieraGattClient::ConnectionPtr connection, Riviera
     connection->WriteCharacteristicWhenAvailable(uuid, std::string(zeroes, sizeof(uint32_t)), RivieraGattClient::Connection::WriteType::REQUEST);
 
     return 0;
-}    
+}
+
+
+
+int write_spam_interleaved(ConnectionPtrVector connections, 
+               RivieraBT::UUID uuid, 
+               RivieraGattClient::Connection::WriteType type = RivieraGattClient::Connection::WriteType::COMMAND, 
+               unsigned int len=READ_N_WRITE_MSG_SIZE, 
+               unsigned int writes=100)
+{
+    for (auto& connection: connections) {
+        if (!connection) {
+            std::cerr << __func__ << ": ConnectionPtr is null!" << std::endl;
+            return -1;
+        }
+    }
+
+    // Prep
+    std::string test_str = random_digits(len); 
+    std::cout << std::dec << "Testing write spam on :" << std::endl; 
+        for (auto& connection: connections) {
+            std::cout << "  " << connection->GetName() << std::endl;
+        }
+        std::cout << "...with randomly generated string " << len << " chars long" << std::endl;
+    
+    // Time the writes
+    std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
+    for (int rounds=0;rounds<writes;++rounds) {
+        for (auto& connection: connections) {
+            connection->WaitForAvailable();
+            connection->WaitForUncongested();
+            connection->WriteCharacteristic(uuid, test_str, type);
+        }
+    }
+    std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+
+    // K we're done
+    unsigned int duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    float duration_s = static_cast<float>(duration_ms) / 1000.0;
+    unsigned int bytes_per_connection = len * writes;
+    float bytes_per_mSec = static_cast<float>(bytes_per_connection) / static_cast<float>(duration_ms); 
+    
+    std::cout << "Took " << duration_s << "seconds to write " << len << " bytes " << writes << " times on on the connections (so " << 
+        bytes_per_connection << " bytes per connection). So " << bytes_per_mSec << " bytes/millisecond on each connection." << std::endl;
+    std::cout << " For each connection the points of congestion and the total time they took are as follows:" << std::endl;
+    for (auto& connection: connections) {
+        std::cout << "   " << connection->GetName() << ": " << connection->GetCongestions() << ", " << 
+            connection->GetTimeSpentCongested() << "ms" << std::endl;
+    }
+    
+    return 0;
+}
           
 
 
@@ -324,7 +375,7 @@ int clear_successful_writes(RivieraGattClient::ConnectionPtr connection, Riviera
 } // End anonymous namespace
 
 
-void GattWriteSpeedTests::CommandPair(std::vector<std::string> device_names, unsigned int number_of_writes) 
+void GattWriteSpeedTests::CommandPairThreaded(std::vector<std::string> device_names, unsigned int number_of_writes) 
 {
     if (device_names.size() != 2) {
         std::cerr << __func__ << " requires exactly TWO devices!!" << std::endl;
@@ -355,9 +406,6 @@ void GattWriteSpeedTests::CommandPair(std::vector<std::string> device_names, uns
     // Spam in threads & wait for em to join
     std::vector<std::thread> write_threads;
     for (auto& connection: connections) {
-        // Using a lambda cuz I want to use default params!!! 🤘
-        //write_threads.push_back(std::thread([&]{write_spam(connection, READ_N_WRITE_COMMAND);}));
-        // TODO: make write size dynamic
         write_threads.push_back(std::thread(write_spam, connection, READ_N_WRITE_COMMAND, RivieraGattClient::Connection::WriteType::COMMAND, 252, number_of_writes));
     }
     for (auto& write_thread: write_threads) {
@@ -371,6 +419,46 @@ void GattWriteSpeedTests::CommandPair(std::vector<std::string> device_names, uns
     }
 }
 
+
+void GattWriteSpeedTests::CommandPairInterleaved(std::vector<std::string> device_names, unsigned int writes_per_device) 
+{
+    ConnectionPtrVector connections = connect_all(device_names);
+    if (connections.size() != device_names.size()) {
+        std::cerr << "Could not connect to all devices!" << std::endl;
+        return;
+    }
+
+    // TODO: Some of the connection-start code sets std::hex somewhere, clean that up
+    std::cout << std::dec;
+
+    if (pre_test(connections) != 0) {
+        std::cerr << "Could not set up all devices!" << std::endl;
+        return;
+    }
+
+    // TODO: Perform write & readback?
+
+    // Clear write counts
+    for (auto& connection: connections) {
+        clear_successful_writes(connection, RivieraGattClient::Connection::WriteType::COMMAND);
+    }
+
+    
+    write_spam_interleaved(connections, READ_N_WRITE_COMMAND, 
+                           RivieraGattClient::Connection::WriteType::COMMAND, 
+                           READ_N_WRITE_MSG_SIZE, writes_per_device);
+    /*
+    std::thread write_thread(write_spam_interleaved, connections, READ_N_WRITE_COMMAND, 
+                           RivieraGattClient::Connection::WriteType::COMMAND, 
+                           READ_N_WRITE_MSG_SIZE, writes_per_device);
+    write_thread.join();                      
+    */
+    // Get write counts
+    sleep(1); // TODO: so fugly
+    for (auto& connection: connections) {
+        get_successful_writes(connection, RivieraGattClient::Connection::WriteType::COMMAND);
+    }
+}
 
 
 

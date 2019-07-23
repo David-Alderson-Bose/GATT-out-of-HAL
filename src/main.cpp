@@ -74,6 +74,9 @@ void signal_handler(int signum)
 
 int main(int argc, char **argv)
 {
+    unsigned int writes = 100;
+    
+    
     // Printing PID makes it easier to send SIGTERM
     id_t pid = getpid();
     std::cout << "Process ID: " << getpid() << std::endl;
@@ -94,7 +97,10 @@ int main(int argc, char **argv)
     std::cout << "Android HAL BT setup complete" << std::endl;
 
     // TESTS
-    GattWriteSpeedTests::CommandPair(std::vector<std::string>({RIGHT_BUD,LEFT_BUD,}), 100);
+ //GattWriteSpeedTests::CommandPairInterleaved(std::vector<std::string>({LEFT_BUD,RIGHT_BUD,}), 1000);
+    GattWriteSpeedTests::CommandPairInterleaved(std::vector<std::string>({RIGHT_BUD,LEFT_BUD,}), 1000);
+    //GattWriteSpeedTests::CommandPairInterleaved(std::vector<std::string>({RIGHT_BUD,/*LEFT_BUD,*/}), 1000);
+
 
     // So long suckers!
     std::cout << std::endl << std::endl;
