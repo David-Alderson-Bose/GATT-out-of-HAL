@@ -68,4 +68,3 @@ build/%.opp: src/%.cpp
 clean:
 	@rm -rf build/*
 	@echo "Squeeky clean!"
-

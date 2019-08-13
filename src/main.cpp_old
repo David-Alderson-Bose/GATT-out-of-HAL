@@ -1,6 +1,6 @@
 /*
  * main.cpp
- * 
+ *
  */
 
 #include <unistd.h>  // for pause & getpid
@@ -16,24 +16,38 @@
 //#include "bluetooth.h"
 
 
-namespace { // Anonymous namespace
-    const uint8_t CS_SVC_UUID[] = { 
-        0x24, 0xdc, 0x0e, 0x6e, 0x01, 0x40, 0xca, 0x9e,
-        0xe5, 0xa9, 0xa3, 0x00, 0xb5, 0xf3, 0x93, 0xe0 };
-    const uint8_t CS_CHARACTERISTIC_TX_UUID[] = { 
-        0x24, 0xdc, 0x0e, 0x6e, 0x02, 0x40, 0xca, 0x9e, 
-        0xe5, 0xa9, 0xa3, 0x00, 0xb5, 0xf3, 0x93, 0xe0  };
-    const uint8_t CS_CHARACTERISTIC_RX_UUID[] = { 
-        0x24, 0xdc, 0x0e, 0x6e, 0x03, 0x40, 0xca, 0x9e, 
-        0xe5, 0xa9, 0xa3, 0x00, 0xb5, 0xf3, 0x93, 0xe0 };
+namespace   // Anonymous namespace
+{
+const uint8_t CS_SVC_UUID[] =
+{
+    0x24, 0xdc, 0x0e, 0x6e, 0x01, 0x40, 0xca, 0x9e,
+    0xe5, 0xa9, 0xa3, 0x00, 0xb5, 0xf3, 0x93, 0xe0
+};
+const uint8_t CS_CHARACTERISTIC_TX_UUID[] =
+{
+    0x24, 0xdc, 0x0e, 0x6e, 0x02, 0x40, 0xca, 0x9e,
+    0xe5, 0xa9, 0xa3, 0x00, 0xb5, 0xf3, 0x93, 0xe0
+};
+const uint8_t CS_CHARACTERISTIC_RX_UUID[] =
+{
+    0x24, 0xdc, 0x0e, 0x6e, 0x03, 0x40, 0xca, 0x9e,
+    0xe5, 0xa9, 0xa3, 0x00, 0xb5, 0xf3, 0x93, 0xe0
+};
 }
 
 
 
 // Trying to get some info on how the program exits
-struct surround_main {
-    surround_main() {std::cout << __func__ << ":Pre-main()!" << std::endl;}
-    ~surround_main() {std::cout << __func__ << ":Post-main()!" << std::endl;}
+struct surround_main
+{
+    surround_main()
+    {
+        std::cout << __func__ << ":Pre-main()!" << std::endl;
+    }
+    ~surround_main()
+    {
+        std::cout << __func__ << ":Post-main()!" << std::endl;
+    }
 };
 static surround_main surroundie;
 
@@ -42,22 +56,25 @@ static surround_main surroundie;
 static volatile sig_atomic_t sig_caught = 0;
 
 
-void signal_handler(int signum)
+void signal_handler( int signum )
 {
-    std::cout << "Got signal: " << strsignal(signum) << std::endl;
+    std::cout << "Got signal: " << strsignal( signum ) << std::endl;
     sig_caught = 1;
 }
 
-void abort_handler(int signum) {
-    if (signum != SIGABRT) {
+void abort_handler( int signum )
+{
+    if( signum != SIGABRT )
+    {
         std::cerr << "DO NOT USE THIS FOR NON_SIGABRYTEuLIULWIUH~~~~!@!!!" << std::endl;
     }
-    exit(1);
+    exit( 1 );
 }
 
-void wait_for_signal(bool wait=true)
+void wait_for_signal( bool wait = true )
 {
-    if (!wait) {
+    if( !wait )
+    {
         return;
     }
     std::cout << "gonna wait for a signal..." << std::endl;
@@ -70,12 +87,14 @@ void wait_for_signal(bool wait=true)
 
 void echo_server()
 {
-    if (0 != BTConnect("Peripheral_")) {
+    if( 0 != BTConnect( "Peripheral_" ) )
+    {
         std::cout << "blergh, no connectie" << std::endl;
         return;
     }
-    
-    if (0 != BLENotifyRegister(CS_CHARACTERISTIC_TX_UUID)) {
+
+    if( 0 != BLENotifyRegister( CS_CHARACTERISTIC_TX_UUID ) )
+    {
         std::cerr << "could not register" << std::endl;
         return;
     }
@@ -90,11 +109,12 @@ void echo_server()
     }*/
     //wait_for_signal();
 
-    while (sig_caught == 0) {
-        sleep(1);
-        time_t now = time(nullptr);
-        std::string time_str(ctime(&now));
-        BLEWriteCharacteristic(CS_CHARACTERISTIC_RX_UUID, std::string("hi_im_eddie: ")+time_str);
+    while( sig_caught == 0 )
+    {
+        sleep( 1 );
+        time_t now = time( nullptr );
+        std::string time_str( ctime( &now ) );
+        BLEWriteCharacteristic( CS_CHARACTERISTIC_RX_UUID, std::string( "hi_im_eddie: " ) + time_str );
     }
     /*
     std::string readie;
@@ -104,7 +124,7 @@ void echo_server()
     } else {
         std::cout << "Got response: " << readie << std::endl;
     }
-    
+
     readie = BLEReadCharacteristic(CS_CHARACTERISTIC_RX_UUID);
     if (readie.empty()) {
         std::cerr << "I read nuffin :-(" << std::endl;
@@ -119,12 +139,14 @@ void echo_server()
 
 void notify_server()
 {
-    if (0 != BTConnect("RubeusBT")) {
+    if( 0 != BTConnect( "RubeusBT" ) )
+    {
         std::cout << "blergh, no connectie" << std::endl;
         return;
     }
-    
-    if (0 != BLENotifyRegister(CS_CHARACTERISTIC_TX_UUID)) {
+
+    if( 0 != BLENotifyRegister( CS_CHARACTERISTIC_TX_UUID ) )
+    {
         std::cerr << "could not register" << std::endl;
         return;
     }
@@ -133,21 +155,22 @@ void notify_server()
 }
 
 
-int main(int argc, char **argv)
+int main( int argc, char **argv )
 {
-    
+
     // Set up signal handling
-    signal(SIGINT, signal_handler);
-    signal(SIGTERM, signal_handler);
+    signal( SIGINT, signal_handler );
+    signal( SIGTERM, signal_handler );
     //signal(SIGABRT, abort_handler);
 
     // Printing PID makes it easier to send SIGTERM
     std::cout << "Process ID: " << getpid() << std::endl;
-    
+
     // What's this?? A BLUETOOTH CALLLLL?????? :-O
-    if (0 != BTSetup()) {
+    if( 0 != BTSetup() )
+    {
         std::cout << "No BT for you today!" << std::endl;
-        exit(1);
+        exit( 1 );
     }
 
 
@@ -158,7 +181,7 @@ int main(int argc, char **argv)
 #endif
 
     BTShutdown();
-    durf("i hope you have...A NICE DAY >:-(");
+    durf( "i hope you have...A NICE DAY >:-(" );
 
     return 0;
 }

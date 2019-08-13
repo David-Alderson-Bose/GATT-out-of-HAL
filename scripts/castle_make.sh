@@ -5,7 +5,6 @@ usage() {
 cat <<EOF
 Use this to call makefiles for a caslte target without having to 
 go through components. 
-
 Exports the following to be available to gnu make:
 Gnu tools for castle: You know, CC, CXX, etc.
 CASTLE_INCLUDE: location for most header files
@@ -13,12 +12,10 @@ CASTLE_LIB: location for most library files, both static and shared
 COMMON_FLAGS=: sysroot, -mtune=cortex-a53 -ftree-vectorize -L{CASTLE_LIB} -I{CASTLE_INCLUDE}"
 CFLAGS: -std=c99
 CXX_FLAGS: -std=c++11
-
 Usage:
 $0 [<rule>] [-r <Riviera Version>] 
 <rule>                  Optional. Target rule to pass into make.
 -r <Riviera Version>    Optional. Riviera Version (defaults to highest available).
-
 EOF
 }
 
@@ -65,6 +62,7 @@ fi
 
 # Finish setup
 echo "Basing build on tools found in $RIVIERA_TOOLCHAIN"
+mkdir build
 export SYSROOT=$RIVIERA_TOOLCHAIN/sdk/sysroots/aarch64-oe-linux
 export CC=${RIVIERA_TOOLCHAIN}/sdk/sysroots/`uname -m`-oesdk-linux/usr/bin/arm-oemllib32-linux/arm-oemllib32-linux-gcc
 export CXX=${RIVIERA_TOOLCHAIN}/sdk/sysroots/`uname -m`-oesdk-linux/usr/bin/arm-oemllib32-linux/arm-oemllib32-linux-g++

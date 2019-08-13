@@ -2,7 +2,7 @@
 
 
 // Android HAL stuff
-extern "C" 
+extern "C"
 {
 #include "bluetooth.h"
 #include "hardware.h"
@@ -10,7 +10,7 @@ extern "C"
 #include "bt_gatt.h"
 #include "bt_gatt_server.h"
 #include "bt_gatt_client.h"
-#include "hardware/vendor.h"
+#include "vendor.h"
 }
 
 
@@ -22,33 +22,34 @@ extern "C"
 
 
 
-namespace RivieraBT {
+namespace RivieraBT
+{
 
-    //using UUID = const uint8_t[UUID_BYTES_LEN];
-    using UUID = std::array<uint8_t, UUID_BYTES_LEN>;
-    using GattPtr = std::shared_ptr<btgatt_interface_t>; 
-    
-    /**
-     * Set up android HAL stack for bluetooth
-     * @return: zero on success, non-zero on failure
-     */     
-    int Setup();
+//using UUID = const uint8_t[UUID_BYTES_LEN];
+using UUID = std::array<uint8_t, UUID_BYTES_LEN>;
+using GattPtr = std::shared_ptr<btgatt_interface_t>;
 
-
-    int Shutdown();
+/**
+ * Set up android HAL stack for bluetooth
+ * @return: zero on success, non-zero on failure
+ */
+int Setup();
 
 
-    /**
-     * Setup done or not?
-     * @return: true if done, false otherwise
-     */
-    bool isSetup();
+int Shutdown();
 
-    /**
-     * TODO
-     */ 
-    GattPtr GetGatt();
 
-    std::string StringifyUUID(UUID uuid);
-    std::string StringifyUUID(bt_uuid_t* uuid);
+/**
+ * Setup done or not?
+ * @return: true if done, false otherwise
+ */
+bool isSetup();
+
+/**
+ * TODO
+ */
+GattPtr GetGatt();
+
+std::string StringifyUUID( UUID uuid );
+std::string StringifyUUID( bt_uuid_t* uuid );
 }

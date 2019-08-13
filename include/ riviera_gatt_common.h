@@ -2,5 +2,5 @@
 
 namespace RivieraGatt
 {
-    Setup();
+Setup();
 }

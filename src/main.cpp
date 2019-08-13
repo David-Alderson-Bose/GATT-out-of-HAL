@@ -1,8 +1,3 @@
-/*
- * main.cpp
- * 
- */
-
 // C headers
 #include <unistd.h>  // for pause & getpid
 #include <signal.h>
@@ -29,50 +24,131 @@
 #include <riviera_gatt_client.hpp>
 #include <gatt_speed_test.hpp>
 
-namespace { // Anonymous namespace for connection properties
-    // Bud names
-    const std::string LEFT_BUD("Rubeus_accel_demo_L");
-    const std::string RIGHT_BUD("Rubeus_accel_demo_R");
-    const std::string FONE("da_fone");
+namespace   // Anonymous namespace for connection properties
+{
 
-    // Bud accelerometer axes
-    const RivieraBT::UUID BUD_X_AXIS = {
-        0xbe, 0x0c, 0x31, 0x50, 0xc9, 0xc2, 0xae, 0x9f, 
-        0x44, 0x41, 0x87, 0x06, 0x6e, 0x91, 0x11, 0x89 
-    };
-    const RivieraBT::UUID BUD_Y_AXIS = {
-        0x7d, 0x2e, 0x7f, 0x77, 0x67, 0x23, 0x62, 0xa3, 
-        0xc7, 0x44, 0x94, 0x92, 0xdc, 0x87, 0x0f, 0xe5
-    }; 
-    const RivieraBT::UUID BUD_Z_AXIS = {
-        0xde, 0x38, 0xd3, 0x34, 0x48, 0xd3, 0x1a, 0x95, 
-        0x12, 0x48, 0xb4, 0x5e, 0x6d, 0x85, 0x0e, 0x60
-    };
+// Remote characteristic UUIDs
+const RivieraBT::UUID remote_name =                     //["Read"]
+{
+    0xfb, 0x34, 0x9b, 0x5f, 0x80, 0x00, 0x00, 0x80,
+    0x00, 0x10, 0x00, 0x00, 0x00, 0x2a, 0x00, 0x00
+};
+const RivieraBT::UUID appearance =                      //["Read"]
+{
+    0xfb, 0x34, 0x9b, 0x5f, 0x80, 0x00, 0x00, 0x80,
+    0x00, 0x10, 0x00, 0x00, 0x01, 0x2a, 0x00, 0x00
+};
+const RivieraBT::UUID service_changed =                 //["Indicate"]
+{
+    0xfb, 0x34, 0x9b, 0x5f, 0x80, 0x00, 0x00, 0x80,
+    0x00, 0x10, 0x00, 0x00, 0x05, 0x2a, 0x00, 0x00
+};
+const RivieraBT::UUID alert_level =                     //["Read","Write", "Write No Response"]
+{
+    0xfb, 0x34, 0x9b, 0x5f, 0x80, 0x00, 0x00, 0x80,
+    0x00, 0x10, 0x00, 0x00, 0x06, 0x2a, 0x00, 0x00
+};
+const RivieraBT::UUID tx_power_level =                  //["Read"]
+{
+    0xfb, 0x34, 0x9b, 0x5f, 0x80, 0x00, 0x00, 0x80,
+    0x00, 0x10, 0x00, 0x00, 0x07, 0x2a, 0x00, 0x00
+};
+const RivieraBT::UUID battery_level =                   //["Read", "Notify"]
+{
+    0xfb, 0x34, 0x9b, 0x5f, 0x80, 0x00, 0x00, 0x80,
+    0x00, 0x10, 0x00, 0x00, 0x19, 0x2a, 0x00, 0x00
+};
+const RivieraBT::UUID system_id =                       //["Read"]
+{
+    0xfb, 0x34, 0x9b, 0x5f, 0x80, 0x00, 0x00, 0x80,
+    0x00, 0x10, 0x00, 0x00, 0x23, 0x2a, 0x00, 0x00
+};
+const RivieraBT::UUID model_number =                    //["Read"]
+{
+    0xfb, 0x34, 0x9b, 0x5f, 0x80, 0x00, 0x00, 0x80,
+    0x00, 0x10, 0x00, 0x00, 0x24, 0x2a, 0x00, 0x00
+};
+const RivieraBT::UUID serial_number =                   //["Read"]
+{
+    0xfb, 0x34, 0x9b, 0x5f, 0x80, 0x00, 0x00, 0x80,
+    0x00, 0x10, 0x00, 0x00, 0x25, 0x2a, 0x00, 0x00
+};
+const RivieraBT::UUID firmware_revision =               //["Read"]
+{
+    0xfb, 0x34, 0x9b, 0x5f, 0x80, 0x00, 0x00, 0x80,
+    0x00, 0x10, 0x00, 0x00, 0x26, 0x2a, 0x00, 0x00
+};
+const RivieraBT::UUID hardware_version =                //["Read"]
+{
+    0xfb, 0x34, 0x9b, 0x5f, 0x80, 0x00, 0x00, 0x80,
+    0x00, 0x10, 0x00, 0x00, 0x27, 0x2a, 0x00, 0x00
+};
+const RivieraBT::UUID software_version =                //["Read"]
+{
+    0xfb, 0x34, 0x9b, 0x5f, 0x80, 0x00, 0x00, 0x80,
+    0x00, 0x10, 0x00, 0x00, 0x28, 0x2a, 0x00, 0x00
+};
+const RivieraBT::UUID manufacturer_name =               //["Read"]
+{
+    0xfb, 0x34, 0x9b, 0x5f, 0x80, 0x00, 0x00, 0x80,
+    0x00, 0x10, 0x00, 0x00, 0x29, 0x2a, 0x00, 0x00
+};
+const RivieraBT::UUID IEEE_reg =                        //["Read"]
+{
+    0xfb, 0x34, 0x9b, 0x5f, 0x80, 0x00, 0x00, 0x80,
+    0x00, 0x10, 0x00, 0x00, 0x2a, 0x2a, 0x00, 0x00
+};
+const RivieraBT::UUID HID_info =                        //["Read"]
+{
+    0xfb, 0x34, 0x9b, 0x5f, 0x80, 0x00, 0x00, 0x80,
+    0x00, 0x10, 0x00, 0x00, 0x4a, 0x2a, 0x00, 0x00
+};
+const RivieraBT::UUID report_map =                      //["Read"]
+{
+    0xfb, 0x34, 0x9b, 0x5f, 0x80, 0x00, 0x00, 0x80,
+    0x00, 0x10, 0x00, 0x00, 0x4b, 0x2a, 0x00, 0x00
+};
+const RivieraBT::UUID HID_control_point =               //["Write No Response"]
+{
+    0xfb, 0x34, 0x9b, 0x5f, 0x80, 0x00, 0x00, 0x80,
+    0x00, 0x10, 0x00, 0x00, 0x4c, 0x2a, 0x00, 0x00
+};
+const RivieraBT::UUID report =                          //["Read", "Notify", "Write No Response"]
+{
+    0xfb, 0x34, 0x9b, 0x5f, 0x80, 0x00, 0x00, 0x80,
+    0x00, 0x10, 0x00, 0x00, 0x4d, 0x2a, 0x00, 0x00
+};
+const RivieraBT::UUID PnP_id =                          //["Read"]
+{
+    0xfb, 0x34, 0x9b, 0x5f, 0x80, 0x00, 0x00, 0x80,
+    0x00, 0x10, 0x00, 0x00, 0x50, 0x2a, 0x00, 0x00
+};
+const RivieraBT::UUID central_address_resolution =      //["Read"]
+{
+    0xfb, 0x34, 0x9b, 0x5f, 0x80, 0x00, 0x00, 0x80,
+    0x00, 0x10, 0x00, 0x00, 0xa6, 0x2a, 0x00, 0x00
+};
 
-   
-    // Bookkeeping
-    static const int CHANNELS(2);
-    static const int AXES(3);
-    static const int BYTES_PER_READ(2);
-    static const int ACCEL_READINGS_SIZE(CHANNELS*AXES*BYTES_PER_READ);
+const RivieraBT::UUID CCCdescriptor =                   //["Read", "Write"]
+{
+    0xfb, 0x34, 0x9b, 0x5f, 0x80, 0x00, 0x00, 0x80,
+    0x00, 0x10, 0x00, 0x00, 0x02, 0x29, 0x00, 0x00
+};
+// Bookkeeping
+static const int CHANNELS( 2 );
+static const int AXES( 3 );
+static const int BYTES_PER_READ( 2 );
+static const int ACCEL_READINGS_SIZE( CHANNELS*AXES*BYTES_PER_READ );
 }
 
-
-
 static volatile sig_atomic_t sig_caught = 0;
-void signal_handler(int signum)
+void signal_handler( int signum )
 {
-    std::cout << "Got signal: " << strsignal(signum) << std::endl;
+    std::cout << "Got signal: " << strsignal( signum ) << std::endl;
     sig_caught = 1;
 }
 
-
-
-
-
-
-
-int main(int argc, char **argv)
+int main( int argc, char **argv )
 {
     // Printing PID makes it easier to send SIGTERM
     id_t pid = getpid();
@@ -80,22 +156,53 @@ int main(int argc, char **argv)
     std::cout << "Setting max process priority..." << std::endl;
     int which = PRIO_PROCESS;
     int priority = -20; // highes priority according to niceness, see https://linux.die.net/man/3/setpriority and https://askubuntu.com/a/1078563
-    if (setpriority(which, pid, priority) != 0) {
-        std::cerr << "Could not set max priority: " << strerror(errno) << " Why even bother????" << std::endl;
+    if( setpriority( which, pid, priority ) != 0 )
+    {
+        std::cerr << "Could not set max priority: " << strerror( errno ) << " Why even bother????" << std::endl;
         return -1;
     }
     std::cout << "Max priority set!" << std::endl;
-    
+
     // What's this?? A BLUETOOTH CALLLLL?????? :-O
-    if (0 != RivieraBT::Setup()) {
+    if( 0 != RivieraBT::Setup() )
+    {
         std::cout << "No BT for you today!" << std::endl;
         return -1;
     }
     std::cout << "Android HAL BT setup complete" << std::endl;
 
     // TESTS
-    GattWriteSpeedTests::CommandPair(std::vector<std::string>({RIGHT_BUD,LEFT_BUD,}), 100);
+    RivieraGattClient::ConnectionPtr connection = RivieraGattClient::Connect( "Bose GC Remote" );
+    std::cout << "remote_name\t" << connection->ReadCharacteristic( remote_name ) << "\n";
+    std::cout << "appearance\t" << connection->ReadCharacteristic( appearance ) << "\n";
+    std::cout << "service_changed\t" << connection->ReadCharacteristic( service_changed ) << "\n";
+    std::cout << "alert_level\t" << connection->ReadCharacteristic( alert_level ) << "\n";
+    std::cout << "tx_power_level\t" << connection->ReadCharacteristic( tx_power_level ) << "\n";
+    std::cout << "battery_level\t" << connection->ReadCharacteristic( battery_level ) << "\n";
+    std::cout << "PnP_id\t" << connection->ReadCharacteristic( PnP_id ) << "\n";
+    std::cout << "central_address_resolution\t" << connection->ReadCharacteristic( central_address_resolution ) << "\n";
+    std::cout << "HID_info\t" << connection->ReadCharacteristic( HID_info ) << "\n";
+    std::cout << "report_map\t" << connection->ReadCharacteristic( report_map ) << "\n";
+    std::cout << "HID_control_point\t" << connection->ReadCharacteristic( HID_control_point ) << "\n";
+    std::cout << "report\t" << connection->ReadCharacteristic( report ) << "\n";
+    std::cout << "system_id\t" << connection->ReadCharacteristic( system_id ) << "\n";
+    std::cout << "model_number\t" << connection->ReadCharacteristic( model_number ) << "\n";
+    std::cout << "serial_number\t" << connection->ReadCharacteristic( serial_number ) << "\n";
+    std::cout << "firmware_revision\t" << connection->ReadCharacteristic( firmware_revision ) << "\n";
+    std::cout << "hardware_version\t" << connection->ReadCharacteristic( hardware_version ) << "\n";
+    std::cout << "software_version\t" << connection->ReadCharacteristic( software_version ) << "\n";
+    std::cout << "manufacturer_name\t" << connection->ReadCharacteristic( manufacturer_name ) << "\n";
+    std::cout << "IEEE_reg\t" << connection->ReadCharacteristic( IEEE_reg ) << "\n";
+    std::cout << "CCCdescriptor\t" << connection->ReadCharacteristic( CCCdescriptor ) << "\n";
 
+    uint8_t notifOn[] = { 0x01, 0x00 };
+    uint8_t temp[] = {0x3};
+    //std::cout << connection->WriteCharacteristicWhenAvailable(HID_control_point, std::string((char*)temp), RivieraGattClient::Connection::COMMAND) << " write\n";
+
+    while( 1 )
+    {
+        std::cout << connection->ReadCharacteristic( remote_name );
+    }
     // So long suckers!
     std::cout << std::endl << std::endl;
     RivieraBT::Shutdown();

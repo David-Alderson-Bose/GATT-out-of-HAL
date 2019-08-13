@@ -7,9 +7,10 @@ OBJS += $(patsubst ./src/%.cpp,./build/%.opp,$(wildcard ./src/*.cpp))
 
 # Header locations
 INCLUDE = -I./include \
-	-I$(CASTLE_INCLUDE)/hardware
+	-I$(CASTLE_INCLUDE)/hardware \
 
 COMMON_FLAGS += -Wreturn-type #-Wall -Werror
+
 
 # Functions to help put "whole archive" modifiers around libraries
 whole_archive = -Wl,--whole-archive,${CASTLE_LIB}/$(1),--no-whole-archive
@@ -38,7 +39,8 @@ OTHER_LIBS := \
 	-lbluetoothdefault \
 	-laudioutils \
 	-llog \
-	-lcutils
+	-lcutils \
+
 
 .PHONY: all clean echo
 all: $(EXE)
@@ -66,4 +68,3 @@ build/%.opp: src/%.cpp
 clean:
 	@rm -rf build/*
 	@echo "Squeeky clean!"
-
