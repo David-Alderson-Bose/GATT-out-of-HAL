@@ -567,6 +567,7 @@ RivieraGattClient::ConnectionPtr RivieraGattClient::Connect( std::string name,
         return nullptr;
     }
     std::cout << "Attempting to connect to " << name << "..." << std::endl;
+    RivieraBT::Bond( s_bda );
     s_conn_id = -1;
     while( s_conn_id <= 0 )
     {
@@ -596,8 +597,10 @@ RivieraGattClient::ConnectionPtr RivieraGattClient::Connect( std::string name,
     s_scanning = true;
     s_gatt_client_interface->search_service(
         s_client_if, nullptr ); // Need to do this before get_gatt_db will work
-    while( s_scanning )
-        ;
+    std::cout << "is it";
+    //while( s_scanning )
+    //    ;
+    std::cout << "here?";
     s_connections[s_conn_id].connection->fetch_services();
     // clear_connect_data();
     return s_connections[s_conn_id].connection;
@@ -907,10 +910,12 @@ int RivieraGattClient::Connection::WriteCharacteristic(
 std::string RivieraGattClient::Connection::ReadCharacteristic(
     RivieraBT::UUID uuid , int index )
 {
+    std::cout << "read";
     std::atomic_bool read_done( false );
     std::string ret_string;
     RivieraGattClient::ReadCallback read_cb = [&]( char* buf, size_t length )
     {
+        std::cout << "read_callback";
         ret_string = std::string( buf, length );
         read_done = true;
     };

@@ -5,11 +5,13 @@
 #include <atomic>
 #include <sstream>
 #include <map>
+#include <cstring>
 #include <algorithm> // for equal
 #include <iterator>
 
 
 #include "riviera_bt.hpp"
+#include "ipc.h"
 
 
 namespace   // Anonymous namespace for values
@@ -76,12 +78,17 @@ static void PinRequestCb( bt_bdaddr_t *bd_addr, bt_bdname_t *bd_name, uint32_t c
 
 static void SspRequestCb( bt_bdaddr_t *bd_addr, bt_bdname_t *bd_name, uint32_t cod, bt_ssp_variant_t pairing_variant, uint32_t pass_key )
 {
-    std::cout << __func__ << ":" << __LINE__ << std::endl;
+    std::cout << std::endl << __func__ << ":" << __LINE__ << std::endl;
+    std::cout << bd_addr << "\t" << bd_name << "\t" << cod << "\t" << pairing_variant << "\t" << pass_key << "\n\n";
+    /* go for auto accept because of user input disabled */
+    s_bt_stack->ssp_reply( bd_addr, pairing_variant,
+                           1, pass_key );
+
 }
 
 static void BondStateChangedCb( bt_status_t status, bt_bdaddr_t *bd_addr, bt_bond_state_t state )
 {
-    std::cout << __func__ << ":" << __LINE__ << std::endl;
+    std::cout << __func__ << ":" << " " << ( ( status == BT_STATUS_FAIL ) ? "failed" : ( ( status == BT_STATUS_SUCCESS ) ? "succeeded" : "different" ) ) << "\t" << ( ( state == BT_BOND_STATE_BONDED ) ? "bonded" : ( ( state == BT_BOND_STATE_BONDING ) ? "bonding" : "none" ) ) << std::endl;
 }
 
 static void AclStateChangedCb( bt_status_t status, bt_bdaddr_t *bd_addr, bt_acl_state_t state )
@@ -257,6 +264,8 @@ int RivieraBT::Setup()
 
     // Do I need to reimplement this? or can I leave it?
     result = s_bt_stack->init( &sBluetoothCallbacks ); // if /usr/bin/btproperty is not running, this will exit your program!
+    s_bt_stack->config_clear();
+
     if( result != BT_STATUS_SUCCESS )
     {
         std::cout << "OH CRAP: " << result << std::endl;
@@ -282,6 +291,12 @@ int RivieraBT::Setup()
         return 1;
     }
     return 0;
+}
+
+void RivieraBT::Bond( bt_bdaddr_t* s_bda )
+{
+    s_bt_stack->remove_bond( s_bda );
+    s_bt_stack->create_bond( s_bda, 1 );
 }
 
 
@@ -315,3 +330,4 @@ RivieraBT::GattPtr RivieraBT::GetGatt()
 {
     return s_gatt_interface;
 }
+

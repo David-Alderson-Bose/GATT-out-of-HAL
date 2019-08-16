@@ -39,6 +39,8 @@ int Setup();
 int Shutdown();
 
 
+void Bond(bt_bdaddr_t* s_bda);
+
 /**
  * Setup done or not?
  * @return: true if done, false otherwise
